@@ -1,0 +1,10 @@
+{
+  "version": 0,
+  "descriptorPath": ".papi/descriptors",
+  "entries": {
+    "tinkernet": {
+      "wsUrl": "wss://tinkernet-rpc.dwellir.com",
+      "metadata": ".papi/metadata/tinkernet.scale"
+    }
+  }
+}
