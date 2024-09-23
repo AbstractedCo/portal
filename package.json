@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "ladle": "ladle serve",
     "lint": "eslint src",
-    "prepare": "panda codegen"
+    "prepare": "papi && panda codegen"
   },
   "keywords": [],
   "author": "",
