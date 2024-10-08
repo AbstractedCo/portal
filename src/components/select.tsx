@@ -1,32 +1,46 @@
 import { css } from "../../styled-system/css";
+import { createListCollection } from "@ark-ui/react";
 import { Select as BaseSelect, Portal } from "@ark-ui/react";
 import type { ReactNode } from "@tanstack/react-router";
 import { ChevronDownIcon } from "lucide-react";
 
-export type SelectProps<T extends string> = {
-  value: T;
-  onChangeValue: (value: T) => void;
-  options:
-    | Array<{ value: T; label: ReactNode; icon?: ReactNode | undefined }>
-    | ReadonlyArray<{
-        value: T;
-        label: ReactNode;
-        icon?: ReactNode | undefined;
-      }>;
+type Option<T> = { label: string; value: T; icon?: ReactNode | undefined };
+
+export type SelectProps<
+  TValue extends string | number,
+  TOption extends Option<TValue>,
+> = {
+  value: TValue | undefined;
+  onChangeValue: (value: TValue) => void;
+  options: TOption[] | readonly TOption[];
+  label?: string;
+  placeholder?: string;
 };
 
-export function Select<T extends string>({
-  value,
-  onChangeValue,
-  options,
-}: SelectProps<T>) {
+export function Select<
+  TValue extends string | number,
+  TOption extends Option<TValue>,
+>({ value, onChangeValue, options }: SelectProps<TValue, TOption>) {
+  const collection = createListCollection({
+    items: options.map(({ icon, ...option }) => option),
+    itemToValue: (option) => String(option.value),
+    itemToString: (option) => option.label,
+  });
+
   return (
     <BaseSelect.Root
-      items={options.map(({ icon, ...option }) => option)}
-      value={[value]}
-      onValueChange={({ value }) => onChangeValue(value.at(0)! as T)}
-      itemToValue={(item) => item.value}
-      itemToString={(item) => item.label}
+      collection={collection}
+      value={value === undefined ? [] : [String(value)]}
+      onValueChange={(event) => {
+        const value = event.value.at(0);
+        const selectedValue = collection.items.find(
+          (item) => item.value === value,
+        );
+
+        if (selectedValue !== undefined) {
+          onChangeValue(selectedValue.value);
+        }
+      }}
     >
       <BaseSelect.Control>
         <BaseSelect.Trigger
@@ -45,7 +59,8 @@ export function Select<T extends string>({
         >
           <BaseSelect.Context>
             {({ value }) =>
-              options.find((option) => value.includes(option.value))?.icon
+              options.find((option) => value.includes(String(option.value)))
+                ?.icon
             }
           </BaseSelect.Context>
           <BaseSelect.ValueText placeholder="Select a Framework" />

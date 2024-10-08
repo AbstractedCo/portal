@@ -12,7 +12,7 @@
   "author": "Tiến Nguyễn Khắc <tien.nguyenkhac@icloud.com>",
   "packageManager": "pnpm@9.12.1",
   "dependencies": {
-    "@ark-ui/react": "^3.13.0",
+    "@ark-ui/react": "^4.1.0",
     "@ladle/react": "^4.1.2",
     "@polkadot-api/descriptors": "file:.papi/descriptors",
     "@reactive-dot/core": "^0.16.0",
