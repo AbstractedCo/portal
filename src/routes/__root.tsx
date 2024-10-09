@@ -1,6 +1,11 @@
 import { css, cx } from "../../styled-system/css";
 import { Button } from "../components/button";
+import { Select } from "../components/select";
 import { config } from "../config";
+import {
+  accountsAtom,
+  selectedAccountIdAtom,
+} from "../features/accounts/store";
 import { AccountListItem } from "../widgets/account-list-item";
 import { Logo } from "../widgets/logo";
 import {
@@ -12,9 +17,11 @@ import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 import { registerDotConnect } from "dot-connect";
 import "dot-connect/font.css";
 import { ConnectionButton } from "dot-connect/react.js";
+import { PolkadotIdenticon } from "dot-identicon/react.js";
 import { atom, useAtom, useSetAtom } from "jotai";
+import { useAtomCallback } from "jotai/utils";
 import { Menu, X } from "lucide-react";
-import { Suspense } from "react";
+import { Suspense, useCallback, useEffect } from "react";
 
 registerDotConnect({ wallets: config.wallets });
 
@@ -40,10 +47,11 @@ function Root() {
                 display: "grid",
                 gridTemplateAreas: `
                   "logo nav"
+                  "side top"
                   "side main"
                 `,
                 gridTemplateColumns: "max-content 1fr",
-                gridTemplateRows: "min-content 1fr",
+                gridTemplateRows: "min-content min-content 1fr",
               },
             })}
           >
@@ -69,6 +77,9 @@ function Root() {
                 },
               })}
             />
+            <TopBar
+              className={css({ gridArea: "top", margin: "1rem 1rem 0 1rem" })}
+            />
             <SideBar
               className={css({
                 gridArea: "side",
@@ -88,6 +99,7 @@ function Root() {
               })}
             >
               <Outlet />
+              <AccountsSynchronizer />
             </div>
           </div>
         </Suspense>
@@ -178,6 +190,58 @@ function Navigation({ className }: NavigationProps) {
   );
 }
 
+type TopBarProps = { className?: string };
+
+function TopBar({ className }: TopBarProps) {
+  return (
+    <header
+      className={cx(
+        css({
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "1rem",
+        }),
+        className,
+      )}
+    >
+      <div className={css({ textStyle: "body" })}>Staking</div>
+      <div
+        className={css({
+          "--dc-primary-color": "var(--colors-primary)",
+          "--dc-on-primary-color": "var(--colors-on-primary)",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+        })}
+      >
+        <Suspense fallback="Loading accounts">
+          <AccountSelect />
+        </Suspense>
+        <ConnectionButton />
+      </div>
+    </header>
+  );
+}
+
+function AccountSelect() {
+  const accounts = useAccounts();
+  const [selectedAccount, setSelectedAccount] = useAtom(selectedAccountIdAtom);
+
+  return (
+    <Select
+      value={selectedAccount}
+      onChangeValue={setSelectedAccount}
+      options={accounts.map((account) => ({
+        value: account.wallet.id + account.address,
+        label: account.name ?? account.address,
+        icon: <PolkadotIdenticon address={account.address} />,
+      }))}
+      placeholder="Select an account"
+    />
+  );
+}
+
 type SideBarProps = {
   className?: string | undefined;
 };
@@ -233,17 +297,6 @@ function SideBar({ className }: SideBarProps) {
           <X />
         </button>
       </div>
-      <div
-        className={css({
-          margin: "0 1rem",
-          width: "stretch",
-          "--dc-primary-color": "var(--colors-primary)",
-          "--dc-on-primary-color": "var(--colors-on-primary)",
-          colorScheme: "dark",
-        })}
-      >
-        <ConnectionButton />
-      </div>
       <Suspense
         fallback={
           <div className={css({ textAlign: "center" })}>loading...</div>
@@ -257,7 +310,7 @@ function SideBar({ className }: SideBarProps) {
           width: "stretch",
         })}
       >
-        Add multisig
+        Add DAO
       </Button>
     </aside>
   );
@@ -274,4 +327,23 @@ function Accounts() {
       ))}
     </ul>
   );
+}
+
+export function AccountsSynchronizer() {
+  return (
+    <Suspense>
+      <_AccountsSynchronizer />
+    </Suspense>
+  );
+}
+
+export function _AccountsSynchronizer() {
+  const accounts = useAccounts();
+  const setAccounts = useSetAtom(accountsAtom);
+
+  useEffect(() => {
+    setAccounts(accounts);
+  }, [accounts, setAccounts]);
+
+  return null;
 }

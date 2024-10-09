@@ -20,7 +20,13 @@ export type SelectProps<
 export function Select<
   TValue extends string | number,
   TOption extends Option<TValue>,
->({ value, onChangeValue, options }: SelectProps<TValue, TOption>) {
+>({
+  value,
+  onChangeValue,
+  options,
+  label,
+  placeholder,
+}: SelectProps<TValue, TOption>) {
   const collection = createListCollection({
     items: options.map(({ icon, ...option }) => option),
     itemToValue: (option) => String(option.value),
@@ -63,7 +69,7 @@ export function Select<
                 ?.icon
             }
           </BaseSelect.Context>
-          <BaseSelect.ValueText placeholder="Select a Framework" />
+          <BaseSelect.ValueText placeholder={placeholder ?? ""} />
           <BaseSelect.Indicator>
             <BaseSelect.Context>
               {({ open }) => (

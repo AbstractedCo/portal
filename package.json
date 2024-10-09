@@ -21,11 +21,13 @@
     "@tanstack/react-router": "^1.63.2",
     "dot-connect": "^0.10.0",
     "dot-identicon": "^0.1.0",
+    "graphql-request": "^7.1.0",
     "jotai": "^2.10.0",
     "lucide-react": "^0.447.0",
     "polkadot-api": "^1.4.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react18-use": "^0.3.0"
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.0",
