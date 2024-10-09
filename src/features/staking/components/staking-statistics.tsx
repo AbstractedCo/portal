@@ -2,11 +2,11 @@ import { css, cx } from "../../../../styled-system/css";
 import {
   CoinsWithCalendarIcon,
   CoinsWithCheckmarkIcon,
-} from "../../../icons/Coins";
-import { CrosshairsIcon } from "../../../icons/CrossHairs";
-import { HourglassIcon, HourglassWithLockIcon } from "../../../icons/Hourglass";
-import { VaultIcon } from "../../../icons/Vault";
+} from "../../../icons/coins";
+import { CrosshairsIcon } from "../../../icons/crosshairs";
+import { HourglassIcon, HourglassWithLockIcon } from "../../../icons/hourglass";
 import { TachometerFastIcon } from "../../../icons/tachometer";
+import { VaultIcon } from "../../../icons/vault";
 import { selectedAccountAtom } from "../../accounts/store";
 import {
   useLazyLoadQuery,
