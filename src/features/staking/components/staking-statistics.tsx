@@ -94,18 +94,25 @@ function UnclaimedEras() {
   );
 
   function SuspendableUnclaimedEras() {
-    const currentEra = useLazyLoadQuery((builder) =>
-      builder.readStorage("OcifStaking", "CurrentEra", []),
+    const [currentEra, registeredCores] = useLazyLoadQuery((builder) =>
+      builder
+        .readStorage("OcifStaking", "CurrentEra", [])
+        .readStorageEntries("OcifStaking", "RegisteredCore", []),
     );
 
     const generalStakerInfo = useLazyLoadQuery((builder) =>
-      builder.readStorage("OcifStaking", "GeneralStakerInfo", [
-        currentEra,
-        account!.address,
-      ]),
+      builder.readStorages(
+        "OcifStaking",
+        "GeneralStakerInfo",
+        registeredCores.map(
+          ({ keyArgs: [coreKey] }) => [coreKey, account!.address] as const,
+        ),
+      ),
     );
 
-    const minEra = Math.min(...generalStakerInfo.map((info) => info.era));
+    const minEra = Math.min(
+      ...generalStakerInfo.flat().map((info) => info.era),
+    );
 
     return (Number.isFinite(minEra) ? currentEra - minEra : 0).toLocaleString();
   }
@@ -118,12 +125,14 @@ function ClaimableRewards() {
     () =>
       account === undefined
         ? undefined
-        : request<{ stakerById: { totalRewards: string } | null | undefined }>(
+        : request<{
+            stakerById: { totalUnclaimed: string } | null | undefined;
+          }>(
             "https://squid.subsquid.io/ocif-squid-invarch/graphql",
             gql`
               query ($address: String!) {
                 stakerById(id: $address) {
-                  totalRewards
+                  totalUnclaimed
                 }
               }
             `,
@@ -158,7 +167,7 @@ function ClaimableRewards() {
 
     return (
       response.stakerById
-        ? fromPlanck(response.stakerById.totalRewards)
+        ? fromPlanck(response.stakerById.totalUnclaimed)
         : fromNumber(0)
     ).toLocaleString();
   }
