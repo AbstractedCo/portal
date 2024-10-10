@@ -6,6 +6,8 @@ export const colors = {
   onSurface: { value: "#ffffff" },
   outline: { value: "#989898" },
   outlineVariant: { value: "#88889333" },
+  success: { value: "#4ade80" },
+  error: { value: "#f87171" },
   container: {
     value: "var(--container-color, var(--colors-surface-container))",
   },

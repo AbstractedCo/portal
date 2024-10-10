@@ -1,11 +1,17 @@
 import { css, cx } from "../../../../styled-system/css";
+import { AlertDialog } from "../../../components/alert-dialog";
 import { Avatar } from "../../../components/avatar";
 import { TextInput } from "../../../components/text-input";
+import { selectedAccountAtom } from "../../accounts/store";
 import {
   useLazyLoadQuery,
   useNativeTokenAmountFromPlanck,
 } from "@reactive-dot/react";
-import { Suspense, useState } from "react";
+import { BigIntMath } from "@reactive-dot/utils";
+import request, { gql } from "graphql-request";
+import { useAtomValue } from "jotai";
+import { Suspense, useMemo, useState } from "react";
+import { use } from "react18-use";
 
 export function RegisteredDaos() {
   return (
@@ -112,17 +118,9 @@ export function SuspendableRegisteredDaos() {
                 >
                   About the project
                 </div>
-                <p
-                  className={css({
-                    height: "7rem",
-                    border: "1px solid {colors.outlineVariant}",
-                    borderRadius: "0.6rem",
-                    padding: "1rem 1.25rem",
-                    overflow: "hidden",
-                  })}
-                >
-                  {core.metadata.description.asText()}
-                </p>
+                <DaoDescription
+                  description={core.metadata.description.asText()}
+                />
               </label>
               <Suspense>
                 <SuspendableCoreInfo
@@ -134,6 +132,45 @@ export function SuspendableRegisteredDaos() {
           ))}
       </div>
     </section>
+  );
+}
+
+type DaoDescriptionProps = { description: string };
+
+function DaoDescription({ description }: DaoDescriptionProps) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        onClick={() => setDialogOpen(true)}
+        className={css({
+          display: "contents",
+          textAlign: "start",
+          cursor: "pointer",
+        })}
+      >
+        <p
+          className={css({
+            height: "7rem",
+            border: "1px solid {colors.outlineVariant}",
+            borderRadius: "0.6rem",
+            padding: "1rem 1.25rem",
+            overflow: "hidden",
+          })}
+        >
+          {description}
+        </p>
+      </button>
+      {dialogOpen && (
+        <AlertDialog
+          title="Project description"
+          onClose={() => setDialogOpen(false)}
+        >
+          {description}
+        </AlertDialog>
+      )}
+    </div>
   );
 }
 
@@ -154,6 +191,8 @@ type CoreInfoProps = {
 };
 
 function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
+  const account = useAtomValue(selectedAccountAtom);
+
   const currentEra = useLazyLoadQuery((builder) =>
     builder.readStorage("OcifStaking", "CurrentEra", []),
   );
@@ -163,6 +202,28 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
   );
 
   const nativeToken = useNativeTokenAmountFromPlanck();
+
+  const indexerResponsePromise = useMemo(
+    () =>
+      request<{
+        coreById:
+          | { totalRewards: string; totalUnclaimed: string }
+          | null
+          | undefined;
+      }>(
+        "https://squid.subsquid.io/ocif-squid-invarch/graphql",
+        gql`
+          query ($coreId: String!) {
+            coreById(id: $coreId) {
+              totalRewards
+              totalUnclaimed
+            }
+          }
+        `,
+        { coreId: String(coreId) },
+      ),
+    [coreId],
+  );
 
   if (stake === undefined) {
     return null;
@@ -182,8 +243,195 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
     >
       <dt>Total stakers</dt>
       <dd>{stake.number_of_stakers}</dd>
+
       <dt>Total staked</dt>
-      <dd>{nativeToken(stake.total).toLocaleString()}</dd>
+      <dd>
+        {nativeToken(stake.total).toLocaleString(undefined, {
+          notation: "compact",
+        })}
+      </dd>
+
+      {account !== undefined && <MyStake />}
+
+      <ClaimedRewards />
+      <UnclaimedRewards />
+      <SupportShare />
+      <SupportThreshold />
     </dl>
   );
+
+  function MyStake() {
+    return (
+      <>
+        <dt>My stake</dt>
+        <dd>
+          <Suspense fallback="...">
+            <SuspendableMyStake />
+          </Suspense>
+        </dd>
+      </>
+    );
+
+    function SuspendableMyStake() {
+      const stakerInfo = useLazyLoadQuery((builder) =>
+        builder.readStorage("OcifStaking", "GeneralStakerInfo", [
+          coreId,
+          account!.address,
+        ]),
+      );
+
+      return useNativeTokenAmountFromPlanck(
+        stakerInfo.reduce((prev, curr) => prev + curr.staked, 0n),
+      ).toLocaleString(undefined, {
+        notation: "compact",
+      });
+    }
+  }
+
+  function ClaimedRewards() {
+    return (
+      <>
+        <dt>Claimed rewards</dt>
+        <dd>
+          <Suspense fallback="...">
+            <SuspendableClaimedRewards />
+          </Suspense>
+        </dd>
+      </>
+    );
+
+    function SuspendableClaimedRewards() {
+      const response = use(indexerResponsePromise) as Awaited<
+        typeof indexerResponsePromise
+      >;
+
+      return useNativeTokenAmountFromPlanck(
+        BigInt(response.coreById?.totalRewards ?? 0n),
+      ).toLocaleString(undefined, {
+        notation: "compact",
+      });
+    }
+  }
+
+  function UnclaimedRewards() {
+    return (
+      <>
+        <dt>Unclaimed rewards</dt>
+        <dd>
+          <Suspense fallback="...">
+            <SuspendableUnclaimedRewards />
+          </Suspense>
+        </dd>
+      </>
+    );
+
+    function SuspendableUnclaimedRewards() {
+      const response = use(indexerResponsePromise) as Awaited<
+        typeof indexerResponsePromise
+      >;
+
+      return useNativeTokenAmountFromPlanck(
+        response.coreById?.totalUnclaimed ?? 0n,
+      ).toLocaleString(undefined, {
+        notation: "compact",
+      });
+    }
+  }
+
+  function SupportShare() {
+    return (
+      <>
+        <dt>Support share</dt>
+        <dd>
+          <Suspense fallback="...">
+            <SuspendableSupportShare />
+          </Suspense>
+        </dd>
+      </>
+    );
+
+    function SuspendableSupportShare() {
+      const currentEra = useLazyLoadQuery((builder) =>
+        builder.readStorage("OcifStaking", "CurrentEra", []),
+      );
+
+      const [eraInfo, coreStake] = useLazyLoadQuery((builder) =>
+        builder
+          .readStorage("OcifStaking", "GeneralEraInfo", [currentEra])
+          .readStorage("OcifStaking", "CoreEraStake", [coreId, currentEra]),
+      );
+
+      const getNativeTokenAmount = useNativeTokenAmountFromPlanck();
+
+      return (
+        eraInfo === undefined || coreStake === undefined
+          ? 0
+          : getNativeTokenAmount(coreStake.total).valueOf() /
+            getNativeTokenAmount(eraInfo.staked).valueOf()
+      ).toLocaleString(undefined, {
+        style: "percent",
+        maximumFractionDigits: 2,
+      });
+    }
+  }
+
+  function SupportThreshold() {
+    return (
+      <>
+        <dt>Min. support met</dt>
+        <dd>
+          <Suspense fallback="...">
+            <SuspendableSupportThreshold />
+          </Suspense>
+        </dd>
+      </>
+    );
+
+    function SuspendableSupportThreshold() {
+      const [_activeThreshold, currentEra] = useLazyLoadQuery((builder) =>
+        builder
+          .getConstant("OcifStaking", "StakeThresholdForActiveCore")
+          .readStorage("OcifStaking", "CurrentEra", []),
+      );
+
+      const coreStake = useLazyLoadQuery((builder) =>
+        builder.readStorage("OcifStaking", "CoreEraStake", [
+          coreId,
+          currentEra,
+        ]),
+      );
+
+      const coreTotalStake = useNativeTokenAmountFromPlanck(
+        coreStake?.total ?? 0n,
+      );
+
+      const activeThreshold = useNativeTokenAmountFromPlanck(_activeThreshold);
+
+      return (
+        <span
+          className={css({
+            color:
+              coreTotalStake.planck >= activeThreshold.planck
+                ? "success"
+                : "error",
+          })}
+        >
+          {coreTotalStake
+            .mapFromPlanck((total) =>
+              BigIntMath.min(total, activeThreshold.planck),
+            )
+            .toLocaleString(undefined, {
+              style: "decimal",
+              notation: "compact",
+            })}
+          /
+          {activeThreshold.toLocaleString(undefined, {
+            style: "decimal",
+            notation: "compact",
+          })}{" "}
+          {coreTotalStake.denomination}
+        </span>
+      );
+    }
+  }
 }
