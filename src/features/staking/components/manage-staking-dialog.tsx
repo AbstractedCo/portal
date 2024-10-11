@@ -101,7 +101,14 @@ export function ManageStakingDialog({
   );
 
   function SuspendableTabs() {
-    const staked = useLazyLoadAccountCoreStake(coreId, account);
+    const staked = useNativeTokenAmountFromPlanck(
+      useLazyLoadQuery((builder) =>
+        builder.readStorage("OcifStaking", "GeneralStakerInfo", [
+          coreId,
+          account.address,
+        ]),
+      ).at(-1)?.staked ?? 0n,
+    );
 
     if (staked.planck <= 0n) {
       return null;
@@ -155,7 +162,7 @@ export function ManageStakingDialog({
             id: registeredCores.at(index)!.keyArgs[0],
             name: registeredCores.at(index)!.value.metadata.name.asText(),
           },
-          staked: info.reduce((prev, curr) => prev + curr.staked, 0n),
+          staked: info.at(-1)?.staked ?? 0n,
         })),
       [registeredCores, stakerInfos],
     );
@@ -263,7 +270,14 @@ export function ManageStakingDialog({
   }
 
   function SuspendableUnstake() {
-    const staked = useLazyLoadAccountCoreStake(coreId, account);
+    const staked = useNativeTokenAmountFromPlanck(
+      useLazyLoadQuery((builder) =>
+        builder.readStorage("OcifStaking", "GeneralStakerInfo", [
+          coreId,
+          account.address,
+        ]),
+      ).at(-1)?.staked ?? 0n,
+    );
 
     const [amount, setAmount] = useState("");
 
