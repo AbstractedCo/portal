@@ -92,7 +92,6 @@ function Root() {
                   gridArea: "side",
                   width: "100dvw",
                   "@media(min-width: 48rem)": {
-                    padding: "2rem 0",
                     width: "16rem",
                   },
                 })}
@@ -310,34 +309,30 @@ function SideBar({ className }: SideBarProps) {
           <div className={css({ textAlign: "center" })}>loading...</div>
         }
       >
-        <Daos />
+        <SuspendableDaos />
+        <Button
+          className={css({
+            margin: "1rem",
+            width: "stretch",
+          })}
+        >
+          Add DAO
+        </Button>{" "}
       </Suspense>
-      <Button
-        className={css({
-          margin: "0 1rem",
-          width: "stretch",
-        })}
-      >
-        Add DAO
-      </Button>
     </aside>
   );
 }
 
-function Daos() {
+function SuspendableDaos() {
   const account = useAtomValue(selectedAccountAtom);
 
   if (account === undefined) {
     return null;
   }
 
-  return (
-    <Suspense>
-      <SuspendableDaos />
-    </Suspense>
-  );
+  return <_SuspendableDaos />;
 
-  function SuspendableDaos() {
+  function _SuspendableDaos() {
     const daoIds = useLazyLoadQuery((builder) =>
       builder.readStorageEntries("CoreAssets", "Accounts", [account!.address]),
     );
@@ -350,7 +345,7 @@ function Daos() {
     );
 
     return (
-      <ul>
+      <ul className={css({ "&:empty": { display: "none" } })}>
         {daos
           .filter((dao) => dao !== undefined)
           .map((dao) => (

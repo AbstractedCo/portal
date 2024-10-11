@@ -21,7 +21,7 @@ export function ListItem({
         display: "flex",
         alignItems: "center",
         gap: "0.5rem",
-        padding: "1.125em",
+        padding: "1em",
         color: "primary",
       })}
     >
