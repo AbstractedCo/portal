@@ -4,7 +4,10 @@ import { Button } from "../../../components/button";
 import { Select } from "../../../components/select";
 import { Tabs } from "../../../components/tabs";
 import { TextInput } from "../../../components/text-input";
-import { SuspendableAccountTotalStake } from "./account-stake";
+import {
+  SuspendableAccountTotalStake,
+  useLazyLoadAccountCoreStake,
+} from "./account-stake";
 import type { WalletAccount } from "@reactive-dot/core/wallets.js";
 import {
   useLazyLoadQuery,
@@ -98,11 +101,9 @@ export function ManageStakingDialog({
   );
 
   function SuspendableTabs() {
-    const ledger = useLazyLoadQuery((builder) =>
-      builder.readStorage("OcifStaking", "Ledger", [account.address]),
-    );
+    const staked = useLazyLoadAccountCoreStake(coreId, account);
 
-    if (ledger.locked <= 0n) {
+    if (staked.planck <= 0n) {
       return null;
     }
 
@@ -262,11 +263,7 @@ export function ManageStakingDialog({
   }
 
   function SuspendableUnstake() {
-    const locked = useNativeTokenAmountFromPlanck(
-      useLazyLoadQuery((builder) =>
-        builder.readStorage("OcifStaking", "Ledger", [account.address]),
-      ).locked,
-    );
+    const staked = useLazyLoadAccountCoreStake(coreId, account);
 
     const [amount, setAmount] = useState("");
 
@@ -289,13 +286,13 @@ export function ManageStakingDialog({
     const error = useMemo(() => {
       if (
         nativeTokenAmount !== undefined &&
-        nativeTokenAmount.planck > locked.planck
+        nativeTokenAmount.planck > staked.planck
       ) {
         return "Insufficient balance";
       }
 
       return;
-    }, [nativeTokenAmount, locked.planck]);
+    }, [nativeTokenAmount, staked.planck]);
 
     const ready = error === undefined && nativeTokenAmount !== undefined;
 
@@ -308,7 +305,7 @@ export function ManageStakingDialog({
       >
         <TextInput
           label="Unstake amount"
-          trailingLabel={<>Available: {locked.toLocaleString()}</>}
+          trailingLabel={<>Available: {staked.toLocaleString()}</>}
           value={amount}
           onChangeValue={setAmount}
           supporting={error}

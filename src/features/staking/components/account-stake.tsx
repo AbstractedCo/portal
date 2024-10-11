@@ -10,16 +10,24 @@ export function SuspendableAccountTotalStake({
   coreId,
   account,
 }: AccountTotalStakeProps) {
-  const stakerInfo = useLazyLoadQuery((builder) =>
-    builder.readStorage("OcifStaking", "GeneralStakerInfo", [
-      coreId,
-      account.address,
-    ]),
+  return useLazyLoadAccountCoreStake(coreId, account).toLocaleString(
+    undefined,
+    {
+      notation: "compact",
+    },
   );
+}
 
+export function useLazyLoadAccountCoreStake(
+  coreId: number,
+  account: WalletAccount,
+) {
   return useNativeTokenAmountFromPlanck(
-    stakerInfo.reduce((prev, curr) => prev + curr.staked, 0n),
-  ).toLocaleString(undefined, {
-    notation: "compact",
-  });
+    useLazyLoadQuery((builder) =>
+      builder.readStorage("OcifStaking", "GeneralStakerInfo", [
+        coreId,
+        account.address,
+      ]),
+    ).reduce((prev, curr) => prev + curr.staked, 0n),
+  );
 }
