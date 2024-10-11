@@ -16,7 +16,12 @@ import {
   useAccounts,
   useLazyLoadQuery,
 } from "@reactive-dot/react";
-import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
+import {
+  createRootRouteWithContext,
+  Link,
+  Outlet,
+  useRouterState,
+} from "@tanstack/react-router";
 import { registerDotConnect } from "dot-connect";
 import "dot-connect/font.css";
 import { ConnectionButton } from "dot-connect/react.js";
@@ -27,7 +32,9 @@ import { Suspense, useEffect } from "react";
 
 registerDotConnect({ wallets: config.wallets });
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{
+  title?: string | undefined;
+}>()({
   component: Root,
 });
 
@@ -200,6 +207,10 @@ function Navigation({ className }: NavigationProps) {
 type TopBarProps = { className?: string };
 
 function TopBar({ className }: TopBarProps) {
+  const matches = useRouterState({ select: (s) => s.matches });
+
+  const title = matches.at(-1)?.context.title;
+
   return (
     <header
       className={cx(
@@ -212,7 +223,9 @@ function TopBar({ className }: TopBarProps) {
         className,
       )}
     >
-      <div className={css({ textStyle: "body" })}>Staking</div>
+      <h1 className={css({ textStyle: "bodyLarge", fontWeight: "bold" })}>
+        {title}
+      </h1>
       <div
         className={css({
           "--dc-primary-color": "var(--colors-primary)",

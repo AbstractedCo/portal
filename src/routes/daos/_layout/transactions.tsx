@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/daos/_layout/transactions")({
   component: TransactionsPage,
+  beforeLoad: () => ({ title: "Transactions" }),
 });
 
 function TransactionsPage() {
