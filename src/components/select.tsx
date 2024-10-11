@@ -131,6 +131,8 @@ export function Select<
               opacity: 0,
               translate: "0 -2rem",
 
+              zIndex: 1,
+
               "&[data-state='open']": {
                 opacity: 1,
                 translate: "0 0",

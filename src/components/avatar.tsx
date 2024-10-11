@@ -11,7 +11,7 @@ export function Avatar({ src, alt }: AvatarProps) {
     <BaseAvatar.Root
       className={css({
         display: "grid",
-        gridTemplateAreas: "content",
+        gridTemplateColumns: "1fr",
         fontSize: "1rem",
         width: "2.5em",
         height: "2.5em",
@@ -19,14 +19,8 @@ export function Avatar({ src, alt }: AvatarProps) {
         overflow: "hidden",
       })}
     >
-      <BaseAvatar.Fallback className={css({ gridArea: "content" })}>
-        {alt}
-      </BaseAvatar.Fallback>
-      <BaseAvatar.Image
-        src={src}
-        alt={alt}
-        className={css({ gridArea: "content" })}
-      />
+      <BaseAvatar.Fallback>{alt}</BaseAvatar.Fallback>
+      <BaseAvatar.Image src={src} alt={alt} />
     </BaseAvatar.Root>
   );
 }

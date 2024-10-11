@@ -38,6 +38,7 @@ export function AlertDialog({
             backgroundColor: "rgb(0, 0, 0, 0.6)",
             backdropFilter: "blur(16px)",
             pointerEvents: "auto",
+            zIndex: 1,
           })}
         />
         <Dialog.Positioner
@@ -45,6 +46,7 @@ export function AlertDialog({
             position: "fixed",
             inset: 0,
             display: "flex",
+            zIndex: 1,
           })}
         >
           <Dialog.Content

@@ -50,7 +50,6 @@ function Root() {
           <Suspense fallback="loading...">
             <div
               className={css({
-                position: "relative",
                 display: "flex",
                 flexDirection: "column",
                 minHeight: "100dvh",
@@ -72,6 +71,7 @@ function Root() {
                   gridArea: "logo",
                   position: "sticky",
                   top: 0,
+                  zIndex: 1,
                 })}
               />
               <Navigation
@@ -98,6 +98,7 @@ function Root() {
                 className={css({
                   gridArea: "side",
                   width: "100dvw",
+                  zIndex: 1,
                   "@media(min-width: 48rem)": {
                     width: "16rem",
                   },
