@@ -4,6 +4,7 @@ import { Select } from "../components/select";
 import { config } from "../config";
 import {
   accountsAtom,
+  selectedAccountAtom,
   selectedAccountIdAtom,
 } from "../features/accounts/store";
 import { AccountListItem } from "../widgets/account-list-item";
@@ -11,6 +12,7 @@ import { Logo } from "../widgets/logo";
 import {
   ChainProvider,
   ReactiveDotProvider,
+  SignerProvider,
   useAccounts,
 } from "@reactive-dot/react";
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
@@ -18,10 +20,9 @@ import { registerDotConnect } from "dot-connect";
 import "dot-connect/font.css";
 import { ConnectionButton } from "dot-connect/react.js";
 import { PolkadotIdenticon } from "dot-identicon/react.js";
-import { atom, useAtom, useSetAtom } from "jotai";
-import { useAtomCallback } from "jotai/utils";
+import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Menu, X } from "lucide-react";
-import { Suspense, useCallback, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 
 registerDotConnect({ wallets: config.wallets });
 
@@ -35,74 +36,80 @@ function Root() {
   return (
     <ReactiveDotProvider config={config}>
       <ChainProvider chainId="tinkernet">
-        <Suspense fallback="loading...">
-          <div
-            className={css({
-              position: "relative",
-              display: "flex",
-              flexDirection: "column",
-              minHeight: "100dvh",
-              "@media(min-width: 48rem)": {
-                height: "100dvh",
-                display: "grid",
-                gridTemplateAreas: `
+        <SignerProvider
+          signer={useAtomValue(selectedAccountAtom)?.polkadotSigner}
+        >
+          <Suspense fallback="loading...">
+            <div
+              className={css({
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                minHeight: "100dvh",
+                "@media(min-width: 48rem)": {
+                  height: "100dvh",
+                  display: "grid",
+                  gridTemplateAreas: `
                   "logo nav"
                   "side top"
                   "side main"
                 `,
-                gridTemplateColumns: "max-content 1fr",
-                gridTemplateRows: "min-content min-content 1fr",
-              },
-            })}
-          >
-            <Header
-              className={css({
-                gridArea: "logo",
-                position: "sticky",
-                top: 0,
-                zIndex: 1,
-              })}
-            />
-            <Navigation
-              className={css({
-                gridArea: "nav",
-                order: 1,
-                position: "sticky",
-                bottom: 0,
-                margin: "2rem 0 0 0",
-                "@media(min-width: 48rem)": {
-                  flex: 1,
-                  order: "revert",
-                  margin: 0,
+                  gridTemplateColumns: "max-content 1fr",
+                  gridTemplateRows: "min-content min-content 1fr",
                 },
-              })}
-            />
-            <TopBar
-              className={css({ gridArea: "top", margin: "1rem 1rem 0 1rem" })}
-            />
-            <SideBar
-              className={css({
-                gridArea: "side",
-                width: "100dvw",
-                "@media(min-width: 48rem)": {
-                  marginTop: "2rem",
-                  width: "16rem",
-                },
-              })}
-            />
-            <div
-              className={css({
-                gridArea: "main",
-                flex: 1,
-                padding: "2rem 1rem",
-                "@media(min-width: 48rem)": { overflow: "auto" },
               })}
             >
-              <Outlet />
-              <AccountsSynchronizer />
+              <Header
+                className={css({
+                  gridArea: "logo",
+                  position: "sticky",
+                  top: 0,
+                })}
+              />
+              <Navigation
+                className={css({
+                  gridArea: "nav",
+                  order: 1,
+                  position: "sticky",
+                  bottom: 0,
+                  margin: "2rem 0 0 0",
+                  "@media(min-width: 48rem)": {
+                    flex: 1,
+                    order: "revert",
+                    margin: 0,
+                  },
+                })}
+              />
+              <TopBar
+                className={css({
+                  gridArea: "top",
+                  padding: "1rem 1rem 0.5rem 1rem",
+                })}
+              />
+              <SideBar
+                className={css({
+                  gridArea: "side",
+                  width: "100dvw",
+                  "@media(min-width: 48rem)": {
+                    marginTop: "2rem",
+                    width: "16rem",
+                  },
+                })}
+              />
+              <div
+                className={css({
+                  gridArea: "main",
+                  flex: 1,
+                  padding: "2rem 1rem",
+                  "@media(min-width: 48rem)": { overflow: "auto" },
+                })}
+              >
+                <Outlet />
+                <AccountsSynchronizer />
+              </div>
             </div>
-          </div>
-        </Suspense>
+          </Suspense>
+        </SignerProvider>
       </ChainProvider>
     </ReactiveDotProvider>
   );
@@ -258,7 +265,6 @@ function SideBar({ className }: SideBarProps) {
           bottom: 0,
           left: 0,
           backgroundColor: "container",
-          zIndex: 1,
           "@media(width < 48rem)": {
             display: "none",
             translate: "-100%",

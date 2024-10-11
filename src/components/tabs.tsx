@@ -32,7 +32,7 @@ function _Tabs<T extends string>({
           "& [data-part='trigger']": {
             flex: 1,
             color: "onSurface",
-            padding: "1em",
+            padding: "0.65em",
             cursor: "pointer",
           },
         })}

@@ -18,6 +18,10 @@ export function Button(props: ButtonProps) {
           padding: "0.8em 1.75em",
           color: "onPrimary",
           cursor: "pointer",
+          "&:disabled": {
+            filter: "brightness(0.5)",
+            cursor: "not-allowed",
+          },
         }),
         props.className,
       )}

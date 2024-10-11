@@ -1,8 +1,11 @@
 import { css, cx } from "../../../../styled-system/css";
 import { AlertDialog } from "../../../components/alert-dialog";
 import { Avatar } from "../../../components/avatar";
+import { Button } from "../../../components/button";
 import { TextInput } from "../../../components/text-input";
 import { selectedAccountAtom } from "../../accounts/store";
+import { SuspendableAccountTotalStake } from "./account-stake";
+import { ManageStakingDialog } from "./manage-staking-dialog";
 import {
   useLazyLoadQuery,
   useNativeTokenAmountFromPlanck,
@@ -51,7 +54,7 @@ export function SuspendableRegisteredDaos() {
         className={css({
           display: "grid",
           gridTemplateColumns:
-            "repeat(auto-fit, minmax(min(24rem, 100%), 1fr))",
+            "repeat(auto-fill, minmax(min(24rem, 100%), 1fr))",
           gap: "1.5rem",
         })}
       >
@@ -65,112 +68,141 @@ export function SuspendableRegisteredDaos() {
                 .includes(search.toLowerCase()),
           )
           .map(({ keyArgs: [id], value: core }) => (
-            <article
+            <RegisteredDao
               key={id}
-              className={css({
-                display: "flex",
-                flexDirection: "column",
-                borderRadius: "1rem",
-                backgroundColor: "surfaceContainer",
-                padding: "2rem",
-              })}
-            >
-              <div
-                className={css({
-                  display: "flex",
-                  flexDirection: "row-reverse",
-                  justifyContent: "start",
-                  alignItems: "center",
-                  gap: "1.25rem",
-                  marginBottom: "2rem",
-                })}
-              >
-                <header>
-                  <h3
-                    className={css({
-                      textStyle: "bodyLarge",
-                      fontWeight: "bold",
-                    })}
-                  >
-                    {core.metadata.name.asText()}
-                  </h3>
-                  <p>
-                    Members:{" "}
-                    {
-                      <Suspense fallback="...">
-                        <SuspendableCoreMemberCount coreId={id} />
-                      </Suspense>
-                    }
-                  </p>
-                </header>
-                <Avatar
-                  src={core.metadata.image.asText()}
-                  alt={core.metadata.name.asText()}
-                />
-              </div>
-              <label>
-                <div
-                  className={css({
-                    textStyle: "bodySmall",
-                    color: "content.muted",
-                    margin: "0 0 0.5rem 1.25rem",
-                  })}
-                >
-                  About the project
-                </div>
-                <DaoDescription
-                  description={core.metadata.description.asText()}
-                />
-              </label>
-              <Suspense>
-                <SuspendableCoreInfo
-                  coreId={id}
-                  className={css({ marginTop: "auto", paddingTop: "1rem" })}
-                />
-              </Suspense>
-            </article>
+              coreId={id}
+              name={core.metadata.name.asText()}
+              imageSrc={core.metadata.image.asText()}
+              description={core.metadata.description.asText()}
+            />
           ))}
       </div>
     </section>
   );
 }
 
-type DaoDescriptionProps = { description: string };
+type RegisteredDaoProps = {
+  coreId: number;
+  name: string;
+  description: string;
+  imageSrc: string;
+};
 
-function DaoDescription({ description }: DaoDescriptionProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
+function RegisteredDao({
+  coreId,
+  name,
+  description,
+  imageSrc,
+}: RegisteredDaoProps) {
+  const account = useAtomValue(selectedAccountAtom);
+  const [manageStakingDialogOpen, setManageStakingDialogOpen] = useState(false);
+  const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
 
   return (
-    <div>
-      <button
-        onClick={() => setDialogOpen(true)}
+    <article
+      className={css({
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: "1rem",
+        backgroundColor: "surfaceContainer",
+        padding: "2rem",
+      })}
+    >
+      <div
         className={css({
-          display: "contents",
-          textAlign: "start",
-          cursor: "pointer",
+          display: "flex",
+          flexDirection: "row-reverse",
+          justifyContent: "start",
+          alignItems: "center",
+          gap: "1.25rem",
+          marginBottom: "2rem",
         })}
       >
-        <p
+        <header>
+          <h3
+            className={css({
+              textStyle: "bodyLarge",
+              fontWeight: "bold",
+            })}
+          >
+            {name}
+          </h3>
+          <p>
+            Members:{" "}
+            {
+              <Suspense fallback="...">
+                <SuspendableCoreMemberCount coreId={coreId} />
+              </Suspense>
+            }
+          </p>
+        </header>
+        <Avatar src={imageSrc} alt={name} />
+      </div>
+      <label>
+        <div
           className={css({
-            height: "7rem",
-            border: "1px solid {colors.outlineVariant}",
-            borderRadius: "0.6rem",
-            padding: "1rem 1.25rem",
-            overflow: "hidden",
+            textStyle: "bodySmall",
+            color: "content.muted",
+            margin: "0 0 0.5rem 1.25rem",
           })}
         >
-          {description}
-        </p>
-      </button>
-      {dialogOpen && (
-        <AlertDialog
-          title="Project description"
-          onClose={() => setDialogOpen(false)}
-        >
-          {description}
-        </AlertDialog>
+          About the project
+        </div>
+        <div>
+          <button
+            onClick={() => setDescriptionDialogOpen(true)}
+            className={css({
+              display: "contents",
+              textAlign: "start",
+              cursor: "pointer",
+            })}
+          >
+            <p
+              className={css({
+                height: "7rem",
+                border: "1px solid {colors.outlineVariant}",
+                borderRadius: "0.6rem",
+                padding: "1rem 1.25rem",
+                overflow: "hidden",
+              })}
+            >
+              {description}
+            </p>
+          </button>
+          {descriptionDialogOpen && (
+            <AlertDialog
+              title="Project description"
+              onClose={() => setDescriptionDialogOpen(false)}
+            >
+              {description}
+            </AlertDialog>
+          )}
+        </div>
+      </label>
+      <Suspense>
+        <SuspendableCoreInfo
+          coreId={coreId}
+          className={css({ marginTop: "auto", paddingTop: "1rem" })}
+        />
+      </Suspense>
+      {account !== undefined && (
+        <>
+          <Button
+            onClick={() => setManageStakingDialogOpen(true)}
+            className={css({ marginTop: "2rem", width: "stretch" })}
+          >
+            Manage staking
+          </Button>
+          {manageStakingDialogOpen && (
+            <ManageStakingDialog
+              coreId={coreId}
+              account={account}
+              onClose={() => setManageStakingDialogOpen(false)}
+            />
+          )}
+        </>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -266,26 +298,11 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
         <dt>My stake</dt>
         <dd>
           <Suspense fallback="...">
-            <SuspendableMyStake />
+            <SuspendableAccountTotalStake coreId={coreId} account={account!} />
           </Suspense>
         </dd>
       </>
     );
-
-    function SuspendableMyStake() {
-      const stakerInfo = useLazyLoadQuery((builder) =>
-        builder.readStorage("OcifStaking", "GeneralStakerInfo", [
-          coreId,
-          account!.address,
-        ]),
-      );
-
-      return useNativeTokenAmountFromPlanck(
-        stakerInfo.reduce((prev, curr) => prev + curr.staked, 0n),
-      ).toLocaleString(undefined, {
-        notation: "compact",
-      });
-    }
   }
 
   function ClaimedRewards() {

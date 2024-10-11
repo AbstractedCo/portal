@@ -1,4 +1,4 @@
-import { css } from "../../styled-system/css";
+import { css, cx } from "../../styled-system/css";
 import { createListCollection } from "@ark-ui/react";
 import { Select as BaseSelect, Portal } from "@ark-ui/react";
 import type { ReactNode } from "@tanstack/react-router";
@@ -15,6 +15,7 @@ export type SelectProps<
   options: TOption[] | readonly TOption[];
   label?: string;
   placeholder?: string;
+  className?: string;
 };
 
 export function Select<
@@ -26,6 +27,7 @@ export function Select<
   options,
   label,
   placeholder,
+  className,
 }: SelectProps<TValue, TOption>) {
   const collection = createListCollection({
     items: options.map(({ icon, ...option }) => option),
@@ -40,57 +42,89 @@ export function Select<
       onValueChange={(event) => {
         const value = event.value.at(0);
         const selectedValue = collection.items.find(
-          (item) => item.value === value,
+          (item) => String(item.value) === value,
         );
 
         if (selectedValue !== undefined) {
           onChangeValue(selectedValue.value);
         }
       }}
+      className={css({ display: "contents" })}
     >
-      <BaseSelect.Control>
-        <BaseSelect.Trigger
-          className={css({
-            fontSize: "1rem",
+      <div
+        className={cx(
+          css({
             display: "flex",
-            alignItems: "center",
-            gap: "1em",
-            border: "1px solid {colors.outlineVariant}",
-            borderRadius: "0.3rem",
-            backgroundColor: "container",
-            padding: "0.875em 1.5em",
-            color: "onSurface",
-            cursor: "pointer",
-          })}
-        >
-          <BaseSelect.Context>
-            {({ value }) =>
-              options.find((option) => value.includes(String(option.value)))
-                ?.icon
-            }
-          </BaseSelect.Context>
-          <BaseSelect.ValueText placeholder={placeholder ?? ""} />
-          <BaseSelect.Indicator>
+            flexDirection: "column",
+            gap: "0.5rem",
+            width: "fit-content",
+            overflow: "hidden",
+          }),
+          className,
+        )}
+      >
+        {label && (
+          <BaseSelect.Label
+            className={css({ textStyle: "bodySmall", color: "content.muted" })}
+          >
+            {label}
+          </BaseSelect.Label>
+        )}
+        <BaseSelect.Control>
+          <BaseSelect.Trigger
+            className={css({
+              fontSize: "1rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "1em",
+              width: "stretch",
+              border: "1px solid {colors.outlineVariant}",
+              borderRadius: "0.3rem",
+              backgroundColor: "container",
+              padding: "0.75em",
+              color: "onSurface",
+              cursor: "pointer",
+            })}
+          >
             <BaseSelect.Context>
-              {({ open }) => (
-                <ChevronDownIcon
-                  className={css({ transition: "0.25s" })}
-                  style={{ rotate: open ? "180deg" : undefined }}
-                />
-              )}
+              {({ value }) =>
+                options.find((option) => value.includes(String(option.value)))
+                  ?.icon
+              }
             </BaseSelect.Context>
-          </BaseSelect.Indicator>
-        </BaseSelect.Trigger>
-      </BaseSelect.Control>
+            <BaseSelect.ValueText
+              placeholder={placeholder ?? ""}
+              className={css({
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              })}
+            />
+            <BaseSelect.Indicator>
+              <BaseSelect.Context>
+                {({ open }) => (
+                  <ChevronDownIcon
+                    className={css({ transition: "0.25s" })}
+                    style={{ rotate: open ? "180deg" : undefined }}
+                  />
+                )}
+              </BaseSelect.Context>
+            </BaseSelect.Indicator>
+          </BaseSelect.Trigger>
+        </BaseSelect.Control>
+      </div>
       <Portal>
         <BaseSelect.Positioner>
           <BaseSelect.Content
             className={css({
+              maxHeight: "var(--available-height)",
+              overflow: "auto",
+
               border: "1px solid {colors.outlineVariant}",
               borderRadius: "0.3rem",
               backgroundColor: "container",
               color: "onSurface",
-              overflow: "hidden",
 
               transition: "0.25s allow-discrete",
 
