@@ -14,6 +14,7 @@ import {
   ReactiveDotProvider,
   SignerProvider,
   useAccounts,
+  useLazyLoadQuery,
 } from "@reactive-dot/react";
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 import { registerDotConnect } from "dot-connect";
@@ -91,7 +92,7 @@ function Root() {
                   gridArea: "side",
                   width: "100dvw",
                   "@media(min-width: 48rem)": {
-                    marginTop: "2rem",
+                    padding: "2rem 0",
                     width: "16rem",
                   },
                 })}
@@ -265,6 +266,7 @@ function SideBar({ className }: SideBarProps) {
           bottom: 0,
           left: 0,
           backgroundColor: "container",
+          overflow: "auto",
           "@media(width < 48rem)": {
             display: "none",
             translate: "-100%",
@@ -308,7 +310,7 @@ function SideBar({ className }: SideBarProps) {
           <div className={css({ textAlign: "center" })}>loading...</div>
         }
       >
-        <Accounts />
+        <Daos />
       </Suspense>
       <Button
         className={css({
@@ -322,17 +324,45 @@ function SideBar({ className }: SideBarProps) {
   );
 }
 
-function Accounts() {
-  const accounts = useAccounts();
+function Daos() {
+  const account = useAtomValue(selectedAccountAtom);
+
+  if (account === undefined) {
+    return null;
+  }
+
   return (
-    <ul>
-      {accounts.map((account) => (
-        <li key={account.wallet.id + account.address}>
-          <AccountListItem address={account.address} name={account.name} />
-        </li>
-      ))}
-    </ul>
+    <Suspense>
+      <SuspendableDaos />
+    </Suspense>
   );
+
+  function SuspendableDaos() {
+    const daoIds = useLazyLoadQuery((builder) =>
+      builder.readStorageEntries("CoreAssets", "Accounts", [account!.address]),
+    );
+    const daos = useLazyLoadQuery((builder) =>
+      builder.readStorages(
+        "OcifStaking",
+        "RegisteredCore",
+        daoIds.map(({ keyArgs: [_, coreId] }) => [coreId] as const),
+      ),
+    );
+
+    return (
+      <ul>
+        {daos
+          .filter((dao) => dao !== undefined)
+          .map((dao) => (
+            <AccountListItem
+              key={dao.account}
+              address={dao.account}
+              name={dao.metadata.name.asText()}
+            />
+          ))}
+      </ul>
+    );
+  }
 }
 
 export function AccountsSynchronizer() {
