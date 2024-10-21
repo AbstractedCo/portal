@@ -7,6 +7,10 @@ import {
   selectedAccountAtom,
   selectedAccountIdAtom,
 } from "../features/accounts/store";
+import {
+  useLazyLoadSelectedDaoId,
+  useSetSelectedDaoId,
+} from "../features/daos/store";
 import { AccountListItem } from "../widgets/account-list-item";
 import { Logo } from "../widgets/logo";
 import {
@@ -339,6 +343,7 @@ function SideBar({ className }: SideBarProps) {
 
 function SuspendableDaos() {
   const account = useAtomValue(selectedAccountAtom);
+  const setSelectedDaoId = useSetSelectedDaoId();
 
   if (account === undefined) {
     return null;
@@ -350,25 +355,49 @@ function SuspendableDaos() {
     const daoIds = useLazyLoadQuery((builder) =>
       builder.readStorageEntries("CoreAssets", "Accounts", [account!.address]),
     );
+
     const daos = useLazyLoadQuery((builder) =>
       builder.readStorages(
         "OcifStaking",
         "RegisteredCore",
         daoIds.map(({ keyArgs: [_, coreId] }) => [coreId] as const),
       ),
-    );
+    )
+      .map((dao, index) => {
+        const id = daoIds.at(index)?.keyArgs[1];
+
+        return dao === undefined || id === undefined
+          ? undefined
+          : { ...dao, id };
+      })
+      .filter((dao) => dao !== undefined);
+
+    const selectedDaoId = useLazyLoadSelectedDaoId();
 
     return (
-      <ul className={css({ "&:empty": { display: "none" } })}>
-        {daos
-          .filter((dao) => dao !== undefined)
-          .map((dao) => (
+      <ul
+        className={css({ marginTop: "1rem", "&:empty": { display: "none" } })}
+      >
+        {daos.map((dao) => (
+          <button
+            key={dao.account}
+            onClick={() => setSelectedDaoId(dao.id)}
+            className={css({
+              margin: "0 0.5rem",
+              borderRadius: "1rem",
+              width: "stretch",
+              backgroundColor:
+                dao.id === selectedDaoId ? "surfaceContainer" : undefined,
+              cursor: "pointer",
+              textAlign: "start",
+            })}
+          >
             <AccountListItem
-              key={dao.account}
               address={dao.account}
               name={dao.metadata.name.asText()}
             />
-          ))}
+          </button>
+        ))}
       </ul>
     );
   }

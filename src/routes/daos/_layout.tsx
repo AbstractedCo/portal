@@ -28,6 +28,7 @@ function Layout() {
         className={css({
           display: "contents",
           "@media(min-width: 64rem)": {
+            flex: "0 0 20rem",
             display: "revert",
             position: "sticky",
             top: 0,
@@ -115,7 +116,10 @@ function Layout() {
       <div
         className={css({
           display: "contents",
-          "@media(min-width: 64rem)": { flex: 1, display: "revert" },
+          "@media(min-width: 64rem)": {
+            flex: 1,
+            display: "revert",
+          },
         })}
       >
         <Tabs
@@ -144,9 +148,7 @@ function Layout() {
             <Tabs.Item value="/daos/members">Members</Tabs.Item>
           </Link>
         </Tabs>
-        <main>
-          <Outlet />
-        </main>
+        <Outlet />
       </div>
     </div>
   );

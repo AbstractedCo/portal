@@ -18,20 +18,20 @@ importers:
         specifier: file:.papi/descriptors
         version: file:.papi/descriptors(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))
       '@reactive-dot/core':
-        specifier: ^0.16.5
-        version: 0.16.5(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))
+        specifier: ^0.22.0
+        version: 0.22.0(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))
       '@reactive-dot/react':
-        specifier: ^0.16.5
-        version: 0.16.5(@types/react@18.3.11)(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))(react@18.3.1)
+        specifier: ^0.22.0
+        version: 0.22.0(@types/react@18.3.11)(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))(react@18.3.1)
       '@reactive-dot/utils':
-        specifier: ^0.8.1
-        version: 0.8.1
+        specifier: ^0.9.0
+        version: 0.9.0
       '@tanstack/react-router':
         specifier: ^1.70.1
         version: 1.70.1(@tanstack/router-generator@1.69.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       dot-connect:
         specifier: ^0.10.0
-        version: 0.10.0(@reactive-dot/core@0.16.5(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1)))(@types/react@18.3.11)(react@18.3.1)
+        version: 0.10.0(@reactive-dot/core@0.22.0(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1)))(@types/react@18.3.11)(react@18.3.1)
       dot-identicon:
         specifier: ^0.1.0
         version: 0.1.0(@types/react@18.3.11)(react@18.3.1)
@@ -1116,18 +1116,18 @@ packages:
   '@preact/signals-core@1.8.0':
     resolution: {integrity: sha512-OBvUsRZqNmjzCZXWLxkZfhcgT+Fk8DDcT/8vD6a1xhDemodyy87UJRJfASMuSD8FaAIeGgGm85ydXhm7lr4fyA==}
 
-  '@reactive-dot/core@0.16.5':
-    resolution: {integrity: sha512-Y0AbXdTtHHWkpEzUkYtiHMZI9ebiMvhB19bSWeixtYA13Hz5LrXvjlktNdyUMFBlqFvpxzbElQcKoem6l1w5Hw==}
+  '@reactive-dot/core@0.22.0':
+    resolution: {integrity: sha512-0bAxW+nvxHZI4liovgF2g1W61d/kL+9jRGFA3XvKQaDeFvgjsmw0pLKNZE91YvKsVZcf3uZEwZ1uRyQm60IyhQ==}
     peerDependencies:
       polkadot-api: 1.x
 
-  '@reactive-dot/react@0.16.5':
-    resolution: {integrity: sha512-R+qbz2RYjaaIWSzMkiBT+cwOqNV2U8Q6oT5UxCoNq3jnpSzCbu11nU7MGaSJAE2Jgz7t+QG+EMNkRBILEsmdjQ==}
+  '@reactive-dot/react@0.22.0':
+    resolution: {integrity: sha512-IUE/lkCOoagAbtajW5G6khmobb1m8pstGT1LGWYC4iudJ0u+dXdp2Y9OqOzgj15YOUyRXV8l1Fu5PMWRY4NRgw==}
     peerDependencies:
       react: 18.x
 
-  '@reactive-dot/utils@0.8.1':
-    resolution: {integrity: sha512-BFMrgm44NMqj0rY5GplqfG4qS5Ogkf30iumWodipi0da9OVn3XgMu8Kp/eA23xJsN4+DP+aOlJas/EBy7IejtQ==}
+  '@reactive-dot/utils@0.9.0':
+    resolution: {integrity: sha512-WpPgoTUri4fgsH56raP0fi/hSXk9O6UovnUa0/+XY9iD0JK/G58XDB7vsBqVcWNh1Q1W4bppyQGWdMU1PSKtNg==}
 
   '@rollup/rollup-android-arm-eabi@4.22.1':
     resolution: {integrity: sha512-GrXxNVBes13Q3wSBjdZlmu4VulFhfNs1eP2/pX5dmx6cE1XgfV2/BfqdGt4d2Z7Zqp+qnYSf7zvIB4buc+2DwA==}
@@ -5849,21 +5849,21 @@ snapshots:
 
   '@preact/signals-core@1.8.0': {}
 
-  '@reactive-dot/core@0.16.5(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))':
+  '@reactive-dot/core@0.22.0(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))':
     dependencies:
-      '@reactive-dot/utils': 0.8.1
+      '@reactive-dot/utils': 0.9.0
       polkadot-api: 1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1)
 
-  '@reactive-dot/react@0.16.5(@types/react@18.3.11)(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))(react@18.3.1)':
+  '@reactive-dot/react@0.22.0(@types/react@18.3.11)(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))(react@18.3.1)':
     dependencies:
-      '@reactive-dot/core': 0.16.5(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))
+      '@reactive-dot/core': 0.22.0(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))
       jotai: 2.10.1(@types/react@18.3.11)(react@18.3.1)
       react: 18.3.1
     transitivePeerDependencies:
       - '@types/react'
       - polkadot-api
 
-  '@reactive-dot/utils@0.8.1': {}
+  '@reactive-dot/utils@0.9.0': {}
 
   '@rollup/rollup-android-arm-eabi@4.22.1':
     optional: true
@@ -7295,12 +7295,12 @@ snapshots:
     dependencies:
       esutils: 2.0.3
 
-  dot-connect@0.10.0(@reactive-dot/core@0.16.5(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1)))(@types/react@18.3.11)(react@18.3.1):
+  dot-connect@0.10.0(@reactive-dot/core@0.22.0(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1)))(@types/react@18.3.11)(react@18.3.1):
     dependencies:
       '@lit-labs/preact-signals': 1.0.2
       '@lit/react': 1.0.5(@types/react@18.3.11)
       '@lit/task': 1.0.1
-      '@reactive-dot/core': 0.16.5(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))
+      '@reactive-dot/core': 0.22.0(polkadot-api@1.6.1(@swc/core@1.7.26(@swc/helpers@0.5.13))(postcss@8.4.47)(rxjs@7.8.1)(smoldot@2.0.30)(tsx@4.19.1))
       dot-identicon: 0.1.0(@types/react@18.3.11)(react@18.3.1)
       lit: 3.2.0
       qrcode: 1.5.4

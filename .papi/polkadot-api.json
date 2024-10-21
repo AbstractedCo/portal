@@ -5,6 +5,10 @@
     "tinkernet": {
       "wsUrl": "wss://tinkernet-rpc.dwellir.com",
       "metadata": ".papi/metadata/tinkernet.scale"
+    },
+    "polkadot_people": {
+      "chain": "polkadot_people",
+      "metadata": ".papi/metadata/polkadot_people.scale"
     }
   }
 }

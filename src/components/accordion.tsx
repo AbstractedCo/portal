@@ -36,7 +36,7 @@ function AccordionItem({ value, summary, children }: AccordionItemProps) {
           justifyContent: "space-between",
           alignItems: "center",
           gap: "0.5rem",
-          width: "100%",
+          width: "stretch",
           cursor: "pointer",
         })}
       >
