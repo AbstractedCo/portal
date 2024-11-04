@@ -131,7 +131,17 @@ function RegisteredDao({
           <p>
             Members:{" "}
             {
-              <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
+              <Suspense
+                fallback={
+                  <CircularProgressIndicator
+                    size="1em"
+                    className={css({
+                      display: "inline-block",
+                      verticalAlign: "baseline",
+                    })}
+                  />
+                }
+              >
                 <SuspendableCoreMemberCount coreId={coreId} />
               </Suspense>
             }
