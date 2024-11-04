@@ -1,6 +1,7 @@
 @layer reset, base, tokens, recipes, utilities;
 
 :root {
+  color-scheme: dark;
   background-color: var(--colors-surface);
   color: var(--colors-on-surface);
 }
