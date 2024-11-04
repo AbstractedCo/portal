@@ -1,5 +1,6 @@
 import { css, cx } from "../../styled-system/css";
 import { Button } from "../components/button";
+import { CircularProgressIndicator } from "../components/circular-progress-indicator";
 import { Select } from "../components/select";
 import { config } from "../config";
 import {
@@ -35,7 +36,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Menu, X } from "lucide-react";
 import { Suspense, useEffect } from "react";
 
-registerDotConnect({ wallets: config.wallets });
+registerDotConnect({ wallets: config.wallets ?? [] });
 
 export const Route = createRootRouteWithContext<{
   title?: string | undefined;
@@ -52,7 +53,7 @@ function Root() {
         <SignerProvider
           signer={useAtomValue(selectedAccountAtom)?.polkadotSigner}
         >
-          <Suspense fallback="loading...">
+          <Suspense fallback={<CircularProgressIndicator />}>
             <div
               className={css({
                 display: "flex",
@@ -256,7 +257,7 @@ function AccountSelect() {
   }
 
   return (
-    <Suspense fallback="Loading accounts">
+    <Suspense fallback={<CircularProgressIndicator />}>
       <SuspendableAccountSelect />
     </Suspense>
   );
@@ -337,11 +338,7 @@ function SideBar({ className }: SideBarProps) {
           <X />
         </button>
       </div>
-      <Suspense
-        fallback={
-          <div className={css({ textAlign: "center" })}>loading...</div>
-        }
-      >
+      <Suspense fallback={<CircularProgressIndicator />}>
         <SuspendableDaos />
         <Button
           className={css({

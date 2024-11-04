@@ -1,3 +1,4 @@
+import { CircularProgressIndicator } from "./components/circular-progress-indicator";
 import "./index.css";
 import { routeTree } from "./routeTree.gen";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
@@ -6,7 +7,7 @@ import ReactDOM from "react-dom/client";
 
 const router = createRouter({
   routeTree,
-  defaultPendingComponent: () => <div>Loading...</div>,
+  defaultPendingComponent: () => <CircularProgressIndicator />,
 });
 
 declare module "@tanstack/react-router" {

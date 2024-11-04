@@ -1,4 +1,5 @@
 import { css, cx } from "../../../../styled-system/css";
+import { CircularProgressIndicator } from "../../../components/circular-progress-indicator";
 import {
   CoinsWithCalendarIcon,
   CoinsWithCheckmarkIcon,
@@ -58,7 +59,7 @@ function MyStake() {
       icon={<CrosshairsIcon />}
       label="My stake"
       value={
-        <Suspense fallback="...">
+        <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
           <SuspendableMyStake />
         </Suspense>
       }
@@ -86,7 +87,7 @@ function UnclaimedEras() {
       icon={<HourglassWithLockIcon />}
       label="Unclaimed eras"
       value={
-        <Suspense fallback="...">
+        <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
           <SuspendableUnclaimedEras />
         </Suspense>
       }
@@ -150,7 +151,7 @@ function ClaimableRewards() {
       icon={<CoinsWithCheckmarkIcon />}
       label="Claimable rewards"
       value={
-        <Suspense fallback="...">
+        <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
           <SuspendableClaimableRewards />
         </Suspense>
       }
@@ -179,7 +180,7 @@ function Apy() {
       icon={<VaultIcon />}
       label="Staking APY"
       value={
-        <Suspense fallback="...">
+        <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
           <SuspendableApy />
         </Suspense>
       }
@@ -218,7 +219,7 @@ function AnnualReward() {
       icon={<CoinsWithCalendarIcon />}
       label="Annual rewards"
       value={
-        <Suspense fallback="...">
+        <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
           <SuspendableAnnualReward />
         </Suspense>
       }
@@ -249,7 +250,7 @@ function CurrentEra() {
       icon={<HourglassIcon />}
       label="Current Era"
       value={
-        <Suspense fallback="...">
+        <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
           <SuspendableCurrentEra />
         </Suspense>
       }
@@ -269,7 +270,7 @@ function Completion() {
       icon={<TachometerFastIcon />}
       label="Completion"
       value={
-        <Suspense fallback="...">
+        <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
           <SuspendableCompletion />
         </Suspense>
       }

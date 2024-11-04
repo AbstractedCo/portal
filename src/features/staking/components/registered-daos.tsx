@@ -2,6 +2,7 @@ import { css, cx } from "../../../../styled-system/css";
 import { AlertDialog } from "../../../components/alert-dialog";
 import { Avatar } from "../../../components/avatar";
 import { Button } from "../../../components/button";
+import { CircularProgressIndicator } from "../../../components/circular-progress-indicator";
 import { TextInput } from "../../../components/text-input";
 import { selectedAccountAtom } from "../../accounts/store";
 import { SuspendableAccountTotalStake } from "./account-stake";
@@ -18,7 +19,7 @@ import { use } from "react18-use";
 
 export function RegisteredDaos() {
   return (
-    <Suspense fallback="...">
+    <Suspense fallback={<CircularProgressIndicator />}>
       <SuspendableRegisteredDaos />
     </Suspense>
   );
@@ -130,7 +131,7 @@ function RegisteredDao({
           <p>
             Members:{" "}
             {
-              <Suspense fallback="...">
+              <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
                 <SuspendableCoreMemberCount coreId={coreId} />
               </Suspense>
             }
@@ -297,7 +298,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
       <>
         <dt>My stake</dt>
         <dd>
-          <Suspense fallback="...">
+          <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
             <SuspendableAccountTotalStake coreId={coreId} account={account!} />
           </Suspense>
         </dd>
@@ -310,7 +311,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
       <>
         <dt>Claimed rewards</dt>
         <dd>
-          <Suspense fallback="...">
+          <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
             <SuspendableClaimedRewards />
           </Suspense>
         </dd>
@@ -335,7 +336,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
       <>
         <dt>Unclaimed rewards</dt>
         <dd>
-          <Suspense fallback="...">
+          <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
             <SuspendableUnclaimedRewards />
           </Suspense>
         </dd>
@@ -360,7 +361,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
       <>
         <dt>Support share</dt>
         <dd>
-          <Suspense fallback="...">
+          <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
             <SuspendableSupportShare />
           </Suspense>
         </dd>
@@ -397,7 +398,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
       <>
         <dt>Min. support met</dt>
         <dd>
-          <Suspense fallback="...">
+          <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
             <SuspendableSupportThreshold />
           </Suspense>
         </dd>

@@ -1,6 +1,7 @@
 import { css } from "../../../../styled-system/css";
 import { Accordion } from "../../../components/accordion";
 import { Button } from "../../../components/button";
+import { CircularProgressIndicator } from "../../../components/circular-progress-indicator";
 import { useLazyLoadSelectedDaoId } from "../../../features/daos/store";
 import { AccountListItem } from "../../../widgets/account-list-item";
 import { useLazyLoadQuery, useTypedApi } from "@reactive-dot/react";
@@ -62,7 +63,7 @@ function SuspendableTransactionPage({
               <Accordion.Item
                 value={index.toString()}
                 summary={
-                  <Suspense fallback="...">
+                  <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
                     <SuspendableSummary />
                   </Suspense>
                 }

@@ -1,6 +1,7 @@
 import { css } from "../../../../styled-system/css";
 import { AlertDialog } from "../../../components/alert-dialog";
 import { Button } from "../../../components/button";
+import { CircularProgressIndicator } from "../../../components/circular-progress-indicator";
 import { Select } from "../../../components/select";
 import { Tabs } from "../../../components/tabs";
 import { TextInput } from "../../../components/text-input";
@@ -67,13 +68,13 @@ export function ManageStakingDialog({
         >
           <article>
             <header>Available balance</header>
-            <Suspense fallback="...">
+            <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
               <SuspendableAvailableBalance />
             </Suspense>
           </article>
           <article>
             <header>Currently staked</header>
-            <Suspense fallback="...">
+            <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
               <SuspendableAccountTotalStake
                 coreId={coreId}
                 account={account!}
@@ -84,7 +85,7 @@ export function ManageStakingDialog({
         <Suspense>
           <SuspendableTabs />
         </Suspense>
-        <Suspense fallback="...">
+        <Suspense fallback={<CircularProgressIndicator />}>
           {(() => {
             switch (tab) {
               case "stake":
