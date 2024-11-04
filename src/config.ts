@@ -1,6 +1,6 @@
 import { polkadot_people, tinkernet } from "@polkadot-api/descriptors";
 import { defineConfig } from "@reactive-dot/core";
-import { InjectedWalletAggregator } from "@reactive-dot/core/wallets.js";
+import { InjectedWalletProvider } from "@reactive-dot/core/wallets.js";
 import { withPolkadotSdkCompat } from "polkadot-api/polkadot-sdk-compat";
 import { getWsProvider } from "polkadot-api/ws-provider/web";
 
@@ -18,5 +18,5 @@ export const config = defineConfig({
     },
   },
   targetChains: ["tinkernet"],
-  wallets: [new InjectedWalletAggregator()],
+  wallets: [new InjectedWalletProvider()],
 });
