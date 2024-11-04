@@ -4,10 +4,8 @@ import { Button } from "../../../components/button";
 import { Select } from "../../../components/select";
 import { Tabs } from "../../../components/tabs";
 import { TextInput } from "../../../components/text-input";
-import {
-  SuspendableAccountTotalStake,
-  useLazyLoadAccountCoreStake,
-} from "./account-stake";
+import { SuspendableAccountTotalStake } from "./account-stake";
+import { pending } from "@reactive-dot/core";
 import type { WalletAccount } from "@reactive-dot/core/wallets.js";
 import {
   useLazyLoadQuery,
@@ -193,7 +191,7 @@ export function ManageStakingDialog({
         ? undefined
         : nativeTokenAmountFromNumber(numberAmount);
 
-    const [_, stake] = useMutation((builder) =>
+    const [stakeState, stake] = useMutation((builder) =>
       sourceBalance === "available"
         ? builder.OcifStaking.stake({
             core_id: coreId,
@@ -261,6 +259,7 @@ export function ManageStakingDialog({
         <Button
           type="submit"
           disabled={!ready}
+          pending={stakeState === pending}
           className={css({ marginTop: "2.5rem", width: "stretch" })}
         >
           {sourceBalance === "available" ? "Stake" : "Restake"}
@@ -290,7 +289,7 @@ export function ManageStakingDialog({
         ? undefined
         : fromNativeTokenAmount(numberAmount);
 
-    const [_, unstake] = useMutation((builder) =>
+    const [unstakeState, unstake] = useMutation((builder) =>
       builder.OcifStaking.unstake({
         core_id: coreId,
         value: nativeTokenAmount?.planck ?? 0n,
@@ -328,6 +327,7 @@ export function ManageStakingDialog({
         <Button
           type="submit"
           disabled={!ready}
+          pending={unstakeState === pending}
           className={css({ marginTop: "2.5rem", width: "stretch" })}
         >
           Unstake

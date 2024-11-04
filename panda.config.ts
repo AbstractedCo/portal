@@ -12,11 +12,21 @@ export default defineConfig({
     backgroundColor: {
       values: "colors",
     },
+    stroke: {
+      values: "colors",
+    },
   },
   theme: {
     textStyles,
     tokens: {
       colors,
+    },
+    keyframes: {
+      spin: {
+        to: {
+          transform: "rotate(360deg)",
+        },
+      },
     },
   },
   include: ["./src/**/*.{js,jsx,ts,tsx}"],
