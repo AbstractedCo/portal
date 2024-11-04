@@ -247,7 +247,7 @@ export function ManageStakingDialog({
             ]}
             value={sourceBalance}
             onChangeValue={setSourceBalance}
-            className={css({ width: "stretch" })}
+            className={css({ width: "stretch!" })}
           />
           <TextInput
             label="Stake amount"
@@ -255,7 +255,7 @@ export function ManageStakingDialog({
             onChangeValue={setAmount}
             trailingLabel={<>Available: {availableToStake.toLocaleString()}</>}
             supporting={error}
-            className={css({ width: "stretch" })}
+            className={css({ width: "stretch!" })}
           />
         </div>
         <Button
@@ -323,7 +323,7 @@ export function ManageStakingDialog({
           value={amount}
           onChangeValue={setAmount}
           supporting={error}
-          className={css({ width: "stretch" })}
+          className={css({ width: "stretch!" })}
         />
         <Button
           type="submit"
