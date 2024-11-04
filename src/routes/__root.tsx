@@ -18,6 +18,7 @@ import {
   ReactiveDotProvider,
   SignerProvider,
   useAccounts,
+  useConnectedWallets,
   useLazyLoadQuery,
 } from "@reactive-dot/react";
 import {
@@ -240,9 +241,7 @@ function TopBar({ className }: TopBarProps) {
           gap: "0.5rem",
         })}
       >
-        <Suspense fallback="Loading accounts">
-          <AccountSelect />
-        </Suspense>
+        <AccountSelect />
         <ConnectionButton />
       </div>
     </header>
@@ -250,21 +249,37 @@ function TopBar({ className }: TopBarProps) {
 }
 
 function AccountSelect() {
-  const accounts = useAccounts();
-  const [selectedAccount, setSelectedAccount] = useAtom(selectedAccountIdAtom);
+  const connectedWallets = useConnectedWallets();
+
+  if (connectedWallets.length === 0) {
+    return null;
+  }
 
   return (
-    <Select
-      value={selectedAccount}
-      onChangeValue={setSelectedAccount}
-      options={accounts.map((account) => ({
-        value: account.wallet.id + account.address,
-        label: account.name ?? account.address,
-        icon: <PolkadotIdenticon address={account.address} />,
-      }))}
-      placeholder="Select an account"
-    />
+    <Suspense fallback="Loading accounts">
+      <SuspendableAccountSelect />
+    </Suspense>
   );
+
+  function SuspendableAccountSelect() {
+    const accounts = useAccounts();
+    const [selectedAccount, setSelectedAccount] = useAtom(
+      selectedAccountIdAtom,
+    );
+
+    return (
+      <Select
+        value={selectedAccount}
+        onChangeValue={setSelectedAccount}
+        options={accounts.map((account) => ({
+          value: account.wallet.id + account.address,
+          label: account.name ?? account.address,
+          icon: <PolkadotIdenticon address={account.address} />,
+        }))}
+        placeholder="Select an account"
+      />
+    );
+  }
 }
 
 type SideBarProps = {
