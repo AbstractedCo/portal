@@ -6,7 +6,7 @@ export type CircularProgressIndicatorProps = {
 };
 
 export function CircularProgressIndicator({
-  size = "2rem",
+  size = "1.5rem",
 }: CircularProgressIndicatorProps) {
   return (
     <Progress.Root
@@ -38,7 +38,7 @@ export function CircularProgressIndicator({
             transitionProperty: "stroke-dasharray, stroke",
             transitionDuration: "0.6s",
             "&[data-state='indeterminate']": {
-              strokeDasharray: "50, 100",
+              strokeDasharray: "calc(var(--circumference) * 1.5)",
             },
           })}
         />

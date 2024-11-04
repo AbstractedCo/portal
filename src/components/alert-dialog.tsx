@@ -88,6 +88,8 @@ export function AlertDialog({
                 className={css({
                   display: "flex",
                   justifyContent: "end",
+                  gap: "0.5rem",
+                  marginTop: "2rem",
                   "&:empty": { display: "none" },
                 })}
               >
