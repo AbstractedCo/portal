@@ -418,7 +418,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
     function SuspendableSupportThreshold() {
       const [_activeThreshold, currentEra] = useLazyLoadQuery((builder) =>
         builder
-          .getConstant("OcifStaking", "StakeThresholdForActiveCore")
+          .getConstant("OcifStaking", "StakeThresholdForActiveDao")
           .readStorage("OcifStaking", "CurrentEra", []),
       );
 

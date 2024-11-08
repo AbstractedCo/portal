@@ -49,7 +49,7 @@ const sideBarOpenAtom = atom(false);
 function Root() {
   return (
     <ReactiveDotProvider config={config}>
-      <ChainProvider chainId="tinkernet">
+      <ChainProvider chainId="invarch">
         <SignerProvider
           signer={useAtomValue(selectedAccountAtom)?.polkadotSigner}
         >

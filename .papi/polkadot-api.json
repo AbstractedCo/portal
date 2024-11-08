@@ -2,9 +2,9 @@
   "version": 0,
   "descriptorPath": ".papi/descriptors",
   "entries": {
-    "tinkernet": {
-      "wsUrl": "wss://tinkernet-rpc.dwellir.com",
-      "metadata": ".papi/metadata/tinkernet.scale"
+    "invarch": {
+      "wsUrl": "wss://invarch-rpc.dwellir.com",
+      "metadata": ".papi/metadata/invarch.scale"
     },
     "polkadot_people": {
       "chain": "polkadot_people",
