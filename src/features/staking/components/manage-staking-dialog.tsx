@@ -18,13 +18,13 @@ import {
 import { Suspense, useMemo, useState } from "react";
 
 export type ManageStakingDialogProps = {
-  coreId: number;
+  daoId: number;
   account: WalletAccount;
   onClose: () => void;
 };
 
 export function ManageStakingDialog({
-  coreId,
+  daoId,
   account,
   onClose,
 }: ManageStakingDialogProps) {
@@ -76,7 +76,7 @@ export function ManageStakingDialog({
             <header>Currently staked</header>
             <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
               <SuspendableAccountTotalStake
-                coreId={coreId}
+                daoId={daoId}
                 account={account!}
               />
             </Suspense>
@@ -103,7 +103,7 @@ export function ManageStakingDialog({
     const staked = useNativeTokenAmountFromPlanck(
       useLazyLoadQuery((builder) =>
         builder.readStorage("OcifStaking", "GeneralStakerInfo", [
-          coreId,
+          daoId,
           account.address,
         ]),
       ).at(-1)?.staked ?? 0n,
@@ -125,7 +125,7 @@ export function ManageStakingDialog({
 
   function SuspendableTitle() {
     const core = useLazyLoadQuery((builder) =>
-      builder.readStorage("OcifStaking", "RegisteredCore", [coreId]),
+      builder.readStorage("OcifStaking", "RegisteredCore", [daoId]),
     );
 
     if (core === undefined) {
@@ -149,7 +149,7 @@ export function ManageStakingDialog({
         "OcifStaking",
         "GeneralStakerInfo",
         registeredCores.map(
-          ({ keyArgs: [coreId] }) => [coreId, account.address] as const,
+          ({ keyArgs: [daoId] }) => [daoId, account.address] as const,
         ),
       ),
     );
@@ -178,8 +178,8 @@ export function ManageStakingDialog({
       sourceBalance === "available"
         ? spendableBalance
         : nativeTokenAmountFromPlanck(
-            coreStakes.find((stake) => stake.core.id === sourceBalance)!.staked,
-          );
+          coreStakes.find((stake) => stake.core.id === sourceBalance)!.staked,
+        );
 
     const [amount, setAmount] = useState("");
 
@@ -195,14 +195,14 @@ export function ManageStakingDialog({
     const [stakeState, stake] = useMutation((builder) =>
       sourceBalance === "available"
         ? builder.OcifStaking.stake({
-            core_id: coreId,
-            value: nativeTokenAmount?.planck ?? 0n,
-          })
+          dao_id: daoId,
+          value: nativeTokenAmount?.planck ?? 0n,
+        })
         : builder.OcifStaking.move_stake({
-            from_core: sourceBalance,
-            to_core: coreId,
-            amount: nativeTokenAmount?.planck ?? 0n,
-          }),
+          from_dao: sourceBalance,
+          to_dao: daoId,
+          amount: nativeTokenAmount?.planck ?? 0n,
+        }),
     );
 
     const error = useMemo(() => {
@@ -273,7 +273,7 @@ export function ManageStakingDialog({
     const staked = useNativeTokenAmountFromPlanck(
       useLazyLoadQuery((builder) =>
         builder.readStorage("OcifStaking", "GeneralStakerInfo", [
-          coreId,
+          daoId,
           account.address,
         ]),
       ).at(-1)?.staked ?? 0n,
@@ -292,7 +292,7 @@ export function ManageStakingDialog({
 
     const [unstakeState, unstake] = useMutation((builder) =>
       builder.OcifStaking.unstake({
-        core_id: coreId,
+        dao_id: daoId,
         value: nativeTokenAmount?.planck ?? 0n,
       }),
     );

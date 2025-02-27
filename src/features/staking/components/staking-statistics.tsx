@@ -127,18 +127,18 @@ function ClaimableRewards() {
       account === undefined
         ? undefined
         : request<{
-            stakerById: { totalUnclaimed: string } | null | undefined;
-          }>(
-            "https://squid.subsquid.io/ocif-squid-invarch/graphql",
-            gql`
+          stakerById: { totalUnclaimed: string } | null | undefined;
+        }>(
+          "https://invarch.squids.live/ocif-squid-invarch/graphql",
+          gql`
               query ($address: String!) {
                 stakerById(id: $address) {
                   totalUnclaimed
                 }
               }
             `,
-            { address: account.address },
-          ),
+          { address: account.address },
+        ),
     [account],
   );
 

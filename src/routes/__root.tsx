@@ -346,7 +346,7 @@ function SideBar({ className }: SideBarProps) {
             width: "stretch",
           })}
         >
-          Add DAO
+          Create DAO
         </Button>{" "}
       </Suspense>
     </aside>
@@ -366,13 +366,15 @@ function SuspendableDaos() {
   function _SuspendableDaos() {
     const daoIds = useLazyLoadQuery((builder) =>
       builder.readStorageEntries("CoreAssets", "Accounts", [account!.address]),
+      // builder.readStorageEntries("CoreAssets", "Accounts", ["i52rHjTpyEPda2cpmrxPkmuBu5JM2i1QMWZTSHBcRPb3g7BMn"]),
+
     );
 
     const daos = useLazyLoadQuery((builder) =>
       builder.readStorages(
-        "OcifStaking",
-        "RegisteredCore",
-        daoIds.map(({ keyArgs: [_, coreId] }) => [coreId] as const),
+        "INV4",
+        "CoreStorage",
+        daoIds.map(({ keyArgs: [_, daoId] }) => [daoId] as const),
       ),
     )
       .map((dao, index) => {
@@ -406,7 +408,7 @@ function SuspendableDaos() {
           >
             <AccountListItem
               address={dao.account}
-              name={dao.metadata.name.asText()}
+              name={dao.metadata.asText()}
             />
           </button>
         ))}

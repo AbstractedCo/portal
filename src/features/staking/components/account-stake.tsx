@@ -4,16 +4,16 @@ import {
   useNativeTokenAmountFromPlanck,
 } from "@reactive-dot/react";
 
-type AccountTotalStakeProps = { coreId: number; account: WalletAccount };
+type AccountTotalStakeProps = { daoId: number; account: WalletAccount };
 
 export function SuspendableAccountTotalStake({
-  coreId,
+  daoId,
   account,
 }: AccountTotalStakeProps) {
   return useNativeTokenAmountFromPlanck(
     useLazyLoadQuery((builder) =>
       builder.readStorage("OcifStaking", "GeneralStakerInfo", [
-        coreId,
+        daoId,
         account.address,
       ]),
     ).at(-1)?.staked ?? 0n,

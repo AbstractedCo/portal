@@ -3,7 +3,17 @@
     "@tsconfig/strictest/tsconfig.json",
     "@tsconfig/vite-react/tsconfig.json"
   ],
-  "compilerOptions": {},
-  "include": ["src", "styled-system", ".ladle/*"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "compilerOptions": {
+    "moduleResolution": "bundler"
+  },
+  "include": [
+    "src",
+    "styled-system",
+    ".ladle/*"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }

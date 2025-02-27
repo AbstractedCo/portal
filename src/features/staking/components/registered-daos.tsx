@@ -71,7 +71,7 @@ export function SuspendableRegisteredDaos() {
           .map(({ keyArgs: [id], value: core }) => (
             <RegisteredDao
               key={id}
-              coreId={id}
+              daoId={id}
               name={core.metadata.name.asText()}
               imageSrc={core.metadata.image.asText()}
               description={core.metadata.description.asText()}
@@ -83,14 +83,14 @@ export function SuspendableRegisteredDaos() {
 }
 
 type RegisteredDaoProps = {
-  coreId: number;
+  daoId: number;
   name: string;
   description: string;
   imageSrc: string;
 };
 
 function RegisteredDao({
-  coreId,
+  daoId,
   name,
   description,
   imageSrc,
@@ -142,7 +142,7 @@ function RegisteredDao({
                   />
                 }
               >
-                <SuspendableCoreMemberCount coreId={coreId} />
+                <SuspendableCoreMemberCount daoId={daoId} />
               </Suspense>
             }
           </p>
@@ -192,7 +192,7 @@ function RegisteredDao({
       </label>
       <Suspense>
         <SuspendableCoreInfo
-          coreId={coreId}
+          daoId={daoId}
           className={css({ marginTop: "auto", paddingTop: "1rem" })}
         />
       </Suspense>
@@ -206,7 +206,7 @@ function RegisteredDao({
           </Button>
           {manageStakingDialogOpen && (
             <ManageStakingDialog
-              coreId={coreId}
+              daoId={daoId}
               account={account}
               onClose={() => setManageStakingDialogOpen(false)}
             />
@@ -218,22 +218,22 @@ function RegisteredDao({
 }
 
 type CoreMemberCountProps = {
-  coreId: number;
+  daoId: number;
 };
 
-function SuspendableCoreMemberCount({ coreId }: CoreMemberCountProps) {
+function SuspendableCoreMemberCount({ daoId }: CoreMemberCountProps) {
   const members = useLazyLoadQuery((builder) =>
-    builder.readStorageEntries("INV4", "CoreMembers", [coreId]),
+    builder.readStorageEntries("INV4", "CoreMembers", [daoId]),
   );
   return members.length;
 }
 
 type CoreInfoProps = {
-  coreId: number;
+  daoId: number;
   className?: string;
 };
 
-function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
+function SuspendableCoreInfo({ daoId, className }: CoreInfoProps) {
   const account = useAtomValue(selectedAccountAtom);
 
   const currentEra = useLazyLoadQuery((builder) =>
@@ -241,7 +241,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
   );
 
   const stake = useLazyLoadQuery((builder) =>
-    builder.readStorage("OcifStaking", "CoreEraStake", [coreId, currentEra]),
+    builder.readStorage("OcifStaking", "CoreEraStake", [daoId, currentEra]),
   );
 
   const nativeToken = useNativeTokenAmountFromPlanck();
@@ -250,22 +250,22 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
     () =>
       request<{
         coreById:
-          | { totalRewards: string; totalUnclaimed: string }
-          | null
-          | undefined;
+        | { totalRewards: string; totalUnclaimed: string }
+        | null
+        | undefined;
       }>(
-        "https://squid.subsquid.io/ocif-squid-invarch/graphql",
+        "https://invarch.squids.live/ocif-squid-invarch/graphql",
         gql`
-          query ($coreId: String!) {
-            coreById(id: $coreId) {
+          query ($daoId: String!) {
+            coreById(id: $daoId) {
               totalRewards
               totalUnclaimed
             }
           }
         `,
-        { coreId: String(coreId) },
+        { daoId: String(daoId) },
       ),
-    [coreId],
+    [daoId],
   );
 
   if (stake === undefined) {
@@ -309,7 +309,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
         <dt>My stake</dt>
         <dd>
           <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
-            <SuspendableAccountTotalStake coreId={coreId} account={account!} />
+            <SuspendableAccountTotalStake daoId={daoId} account={account!} />
           </Suspense>
         </dd>
       </>
@@ -386,7 +386,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
       const [eraInfo, coreStake] = useLazyLoadQuery((builder) =>
         builder
           .readStorage("OcifStaking", "GeneralEraInfo", [currentEra])
-          .readStorage("OcifStaking", "CoreEraStake", [coreId, currentEra]),
+          .readStorage("OcifStaking", "CoreEraStake", [daoId, currentEra]),
       );
 
       const getNativeTokenAmount = useNativeTokenAmountFromPlanck();
@@ -395,7 +395,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
         eraInfo === undefined || coreStake === undefined
           ? 0
           : getNativeTokenAmount(coreStake.total).valueOf() /
-            getNativeTokenAmount(eraInfo.staked).valueOf()
+          getNativeTokenAmount(eraInfo.staked).valueOf()
       ).toLocaleString(undefined, {
         style: "percent",
         maximumFractionDigits: 2,
@@ -424,7 +424,7 @@ function SuspendableCoreInfo({ coreId, className }: CoreInfoProps) {
 
       const coreStake = useLazyLoadQuery((builder) =>
         builder.readStorage("OcifStaking", "CoreEraStake", [
-          coreId,
+          daoId,
           currentEra,
         ]),
       );

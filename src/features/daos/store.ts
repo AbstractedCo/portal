@@ -26,7 +26,7 @@ export function useLazyLoadSelectedDaoId() {
 
   return (
     accountCoreAssets.find(
-      ({ keyArgs: [_, coreId] }) => coreId === selectedDaoId,
+      ({ keyArgs: [_, daoId] }) => daoId === selectedDaoId,
     ) ?? accountCoreAssets.at(0)
   )?.keyArgs[1];
 }
@@ -34,3 +34,5 @@ export function useLazyLoadSelectedDaoId() {
 export function useSetSelectedDaoId() {
   return useSetAtom(selectedDaoIdAtom);
 }
+
+

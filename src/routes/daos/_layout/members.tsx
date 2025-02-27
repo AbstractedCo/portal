@@ -17,6 +17,7 @@ export const Route = createFileRoute("/daos/_layout/members")({
 
 function MembersPage() {
   const daoId = useLazyLoadSelectedDaoId();
+  // console.log(daoId);
 
   if (daoId === undefined) {
     return null;
@@ -59,7 +60,7 @@ function Member({ daoId, address }: MemberProps) {
 
   const [removeMemberState, removeMember] = useMutation((tx) =>
     tx.INV4.operate_multisig({
-      core_id: daoId,
+      dao_id: daoId,
       call: tx.INV4.token_burn({ target: address, amount: 0n }).decodedCall,
       fee_asset: { type: "Native", value: undefined },
       metadata: undefined,
