@@ -1,6 +1,7 @@
 import { css } from "../../styled-system/css";
 import { Copy, X } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import type { CSSProperties } from "react";
+import { useEffect, useState } from "react";
 
 type NotificationVariant = "success" | "error";
 
@@ -8,52 +9,34 @@ type NotificationPopupProps = {
     variant: NotificationVariant;
     message: string;
     onClose: () => void;
+    style?: CSSProperties;
 };
 
-export function NotificationPopup({ variant, message, onClose }: NotificationPopupProps) {
-    const [timeoutId, setTimeoutId] = useState<number | null>(null);
+export function NotificationPopup({
+    variant,
+    message,
+    onClose,
+    style
+}: NotificationPopupProps) {
+    const [isHovered, setIsHovered] = useState(false);
 
-    const startCloseTimer = useCallback(() => {
-        // Clear any existing timeout
-        if (timeoutId) {
-            window.clearTimeout(timeoutId);
+    useEffect(() => {
+        if (isHovered) {
+            return; // Don't set up timer if hovered
         }
 
-        // Set new timeout
-        const newTimeoutId = window.setTimeout(() => {
+        const timeoutId = window.setTimeout(() => {
             onClose();
         }, 5000);
 
-        setTimeoutId(newTimeoutId);
-    }, [onClose, timeoutId]);
-
-    useEffect(() => {
-        // Start initial timer
-        startCloseTimer();
-
-        // Cleanup on unmount
         return () => {
-            if (timeoutId) {
-                window.clearTimeout(timeoutId);
-            }
-        };
-    }, []); // Empty dependency array for initial setup only
-
-    const handleMouseEnter = () => {
-        if (timeoutId) {
             window.clearTimeout(timeoutId);
-            setTimeoutId(null);
-        }
-    };
-
-    const handleMouseLeave = () => {
-        startCloseTimer();
-    };
+        };
+    }, [isHovered, onClose]);
 
     const handleCopy = async () => {
         try {
             await navigator.clipboard.writeText(message);
-            // Optionally, you could show a brief "Copied!" message here
         } catch (err) {
             console.error('Failed to copy text:', err);
         }
@@ -61,12 +44,9 @@ export function NotificationPopup({ variant, message, onClose }: NotificationPop
 
     return (
         <div
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             className={css({
-                position: "fixed",
-                top: "1rem",
-                right: "1rem",
                 display: "flex",
                 alignItems: "center",
                 gap: "0.5rem",
@@ -77,11 +57,14 @@ export function NotificationPopup({ variant, message, onClose }: NotificationPop
                 fontSize: "0.875rem",
                 fontWeight: "500",
                 boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-                zIndex: 9999999,
-                transition: "opacity 150ms ease-in-out",
+                transition: "all 150ms ease-in-out",
                 animation: "slideIn 0.3s ease-out",
+                width: "fit-content",
                 pointerEvents: "auto",
+                position: "relative",
+                zIndex: 1,
             })}
+            style={style}
         >
             <button
                 onClick={handleCopy}
@@ -98,12 +81,7 @@ export function NotificationPopup({ variant, message, onClose }: NotificationPop
             </button>
             <span>{message}</span>
             <button
-                onClick={() => {
-                    if (timeoutId) {
-                        window.clearTimeout(timeoutId);
-                    }
-                    onClose();
-                }}
+                onClick={onClose}
                 className={css({
                     padding: "0.25rem",
                     cursor: "pointer",
