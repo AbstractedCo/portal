@@ -400,23 +400,6 @@ function SuspendableDaos() {
       };
     }, [refreshDaoIds, refreshDaos]);
 
-    useEffect(() => {
-      const intervalId = setInterval(async () => {
-        try {
-          await Promise.all([
-            refreshDaoIds(),
-            refreshDaos()
-          ]);
-        } catch (error) {
-          console.error('Failed to refresh DAO list:', error);
-        }
-      }, 5000);
-
-      return () => {
-        clearInterval(intervalId);
-      };
-    }, [refreshDaoIds, refreshDaos]);
-
     const daosList = daos
       .map((dao, index) => {
         const id = daoIds.at(index)?.keyArgs[1];
