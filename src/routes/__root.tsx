@@ -34,7 +34,8 @@ import { ConnectionButton } from "dot-connect/react.js";
 import { PolkadotIdenticon } from "dot-identicon/react.js";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Menu, X } from "lucide-react";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { CreateDaoDialog } from "../features/daos/components/create-dao-dialog";
 
 registerDotConnect({ wallets: config.wallets ?? [] });
 
@@ -289,6 +290,8 @@ type SideBarProps = {
 
 function SideBar({ className }: SideBarProps) {
   const [sideBarOpen, setSideBarOpen] = useAtom(sideBarOpenAtom);
+  const [createDaoDialogOpen, setCreateDaoDialogOpen] = useState(false);
+
   return (
     <aside
       data-state={sideBarOpen ? "open" : "closed"}
@@ -341,13 +344,17 @@ function SideBar({ className }: SideBarProps) {
       <Suspense fallback={<CircularProgressIndicator />}>
         <SuspendableDaos />
         <Button
+          onClick={() => setCreateDaoDialogOpen(true)}
           className={css({
             margin: "1rem",
             width: "stretch",
           })}
         >
           Create DAO
-        </Button>{" "}
+        </Button>
+        {createDaoDialogOpen && (
+          <CreateDaoDialog onClose={() => setCreateDaoDialogOpen(false)} />
+        )}
       </Suspense>
     </aside>
   );
