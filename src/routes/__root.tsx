@@ -48,6 +48,8 @@ export const Route = createRootRouteWithContext<{
 const sideBarOpenAtom = atom(false);
 
 function Root() {
+  const [createDaoDialogOpen, setCreateDaoDialogOpen] = useState(false);
+
   return (
     <ReactiveDotProvider config={config}>
       <ChainProvider chainId="invarch">
@@ -102,6 +104,7 @@ function Root() {
                 })}
               />
               <SideBar
+                onCreateDao={() => setCreateDaoDialogOpen(true)}
                 className={css({
                   gridArea: "side",
                   width: "100dvw",
@@ -123,6 +126,9 @@ function Root() {
                 <AccountsSynchronizer />
               </div>
             </div>
+            {createDaoDialogOpen && (
+              <CreateDaoDialog onClose={() => setCreateDaoDialogOpen(false)} />
+            )}
           </Suspense>
         </SignerProvider>
       </ChainProvider>
@@ -286,11 +292,11 @@ function AccountSelect() {
 
 type SideBarProps = {
   className?: string | undefined;
+  onCreateDao: () => void;
 };
 
-function SideBar({ className }: SideBarProps) {
+function SideBar({ className, onCreateDao }: SideBarProps) {
   const [sideBarOpen, setSideBarOpen] = useAtom(sideBarOpenAtom);
-  const [createDaoDialogOpen, setCreateDaoDialogOpen] = useState(false);
 
   return (
     <aside
@@ -344,7 +350,7 @@ function SideBar({ className }: SideBarProps) {
       <Suspense fallback={<CircularProgressIndicator />}>
         <SuspendableDaos />
         <Button
-          onClick={() => setCreateDaoDialogOpen(true)}
+          onClick={onCreateDao}
           className={css({
             margin: "1rem",
             width: "stretch",
@@ -352,9 +358,6 @@ function SideBar({ className }: SideBarProps) {
         >
           Create DAO
         </Button>
-        {createDaoDialogOpen && (
-          <CreateDaoDialog onClose={() => setCreateDaoDialogOpen(false)} />
-        )}
       </Suspense>
     </aside>
   );

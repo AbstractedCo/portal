@@ -1,11 +1,12 @@
 import { css } from "../../../../styled-system/css";
-import { AlertDialog } from "../../../components/alert-dialog";
+import { ModalDialog } from "../../../components/modal-dialog";
 import { Button } from "../../../components/button";
 import { TextInput } from "../../../components/text-input";
 import { useState } from "react";
-import { useMutation } from "@reactive-dot/react";
+import { useMutation, useMutationEffect } from "@reactive-dot/react";
 import { Binary, Enum } from "polkadot-api";
-import { pending } from "@reactive-dot/core";
+import { MutationError, pending } from "@reactive-dot/core";
+import { useNotification } from "../../../contexts/notification-context";
 
 type CreateDaoDialogProps = {
     onClose: () => void;
@@ -15,6 +16,8 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
     const [name, setName] = useState("");
     const [minimumSupport, setMinimumSupport] = useState(0);
     const [requiredApproval, setRequiredApproval] = useState(0);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const { showNotification } = useNotification();
 
     // Convert percentage to perbill (0-100 -> 0-1,000,000,000)
     const percentageToPerbill = (percentage: number) => Math.floor(percentage * 10_000_000);
@@ -28,18 +31,65 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
         })
     );
 
+    useMutationEffect((event) => {
+        setIsProcessing(true);
+
+        if (event.value === pending) {
+            showNotification({
+                variant: "success",
+                message: "Submitting transaction...",
+            });
+            return;
+        }
+
+        if (event.value instanceof MutationError) {
+            setIsProcessing(false);
+            showNotification({
+                variant: "error",
+                message: "Failed to submit transaction",
+            });
+            return;
+        }
+
+        switch (event.value.type) {
+            case "finalized":
+                setIsProcessing(false);
+                if (event.value.ok) {
+                    showNotification({
+                        variant: "success",
+                        message: "DAO created successfully!",
+                    });
+                    onClose();
+                } else {
+                    showNotification({
+                        variant: "error",
+                        message: "Transaction failed",
+                    });
+                }
+                break;
+            default:
+                showNotification({
+                    variant: "success",
+                    message: "Transaction pending...",
+                });
+        }
+    });
+
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         try {
             await createDao();
-            onClose();
         } catch (error) {
             console.error("Failed to create DAO:", error);
+            showNotification({
+                variant: "error",
+                message: "Failed to create DAO: " + (error instanceof Error ? error.message : "Unknown error"),
+            });
         }
     };
 
     return (
-        <AlertDialog
+        <ModalDialog
             title="Create DAO"
             onClose={onClose}
             className={css({
@@ -92,7 +142,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                 />
                 <Button
                     type="submit"
-                    disabled={createDaoState === pending}
+                    disabled={createDaoState === pending || isProcessing}
                     className={css({
                         marginTop: "1rem",
                         width: "stretch",
@@ -101,6 +151,6 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                     Create DAO
                 </Button>
             </form>
-        </AlertDialog>
+        </ModalDialog>
     );
 }

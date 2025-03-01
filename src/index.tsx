@@ -4,6 +4,7 @@ import { routeTree } from "./routeTree.gen";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
+import { NotificationProvider } from "./contexts/notification-context";
 
 const router = createRouter({
   routeTree,
@@ -18,6 +19,8 @@ declare module "@tanstack/react-router" {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <NotificationProvider>
+      <RouterProvider router={router} />
+    </NotificationProvider>
   </StrictMode>,
 );

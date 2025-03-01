@@ -27,6 +27,16 @@ export default defineConfig({
           transform: "rotate(360deg)",
         },
       },
+      slideIn: {
+        from: {
+          transform: "translateX(100%)",
+          opacity: 0,
+        },
+        to: {
+          transform: "translateX(0)",
+          opacity: 1,
+        },
+      },
     },
   },
   include: ["./src/**/*.{js,jsx,ts,tsx}"],
