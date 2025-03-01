@@ -12,6 +12,12 @@ type CreateDaoDialogProps = {
     onClose: () => void;
 };
 
+declare global {
+    interface Window {
+        refreshDaoList?: (() => Promise<void>) | undefined;
+    }
+}
+
 export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
     const [name, setName] = useState("");
     const [minimumSupport, setMinimumSupport] = useState(0);
@@ -59,6 +65,8 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                         variant: "success",
                         message: "DAO created successfully!",
                     });
+                    // Refresh the DAO list when creation is finalized
+                    window.refreshDaoList?.();
                     onClose();
                 } else {
                     showNotification({

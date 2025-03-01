@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 import { css, cx } from "../../styled-system/css";
 import { Button } from "../components/button";
 import { CircularProgressIndicator } from "../components/circular-progress-indicator";
@@ -20,7 +21,8 @@ import {
   SignerProvider,
   useAccounts,
   useConnectedWallets,
-  useLazyLoadQuery,
+  // useLazyLoadQuery,
+  useLazyLoadQueryWithRefresh,
 } from "@reactive-dot/react";
 import {
   createRootRouteWithContext,
@@ -374,22 +376,50 @@ function SuspendableDaos() {
   return <_SuspendableDaos />;
 
   function _SuspendableDaos() {
-    const daoIds = useLazyLoadQuery((builder) =>
-      builder.readStorageEntries("CoreAssets", "Accounts", [account!.address]),
-      // builder.readStorageEntries("CoreAssets", "Accounts", ["i52rHjTpyEPda2cpmrxPkmuBu5JM2i1QMWZTSHBcRPb3g7BMn"]),
-
+    const [daoIds, refreshDaoIds] = useLazyLoadQueryWithRefresh((builder) =>
+      builder.readStorageEntries("CoreAssets", "Accounts", [account!.address])
     );
 
-    const daos = useLazyLoadQuery((builder) =>
+    const [daos, refreshDaos] = useLazyLoadQueryWithRefresh((builder) =>
       builder.readStorages(
         "INV4",
         "CoreStorage",
         daoIds.map(({ keyArgs: [_, daoId] }) => [daoId] as const),
       ),
-    )
+    );
+
+    useEffect(() => {
+      window.refreshDaoList = async () => {
+        await Promise.all([
+          refreshDaoIds(),
+          refreshDaos()
+        ]);
+      };
+      return () => {
+        window.refreshDaoList = undefined;
+      };
+    }, [refreshDaoIds, refreshDaos]);
+
+    useEffect(() => {
+      const intervalId = setInterval(async () => {
+        try {
+          await Promise.all([
+            refreshDaoIds(),
+            refreshDaos()
+          ]);
+        } catch (error) {
+          console.error('Failed to refresh DAO list:', error);
+        }
+      }, 5000);
+
+      return () => {
+        clearInterval(intervalId);
+      };
+    }, [refreshDaoIds, refreshDaos]);
+
+    const daosList = daos
       .map((dao, index) => {
         const id = daoIds.at(index)?.keyArgs[1];
-
         return dao === undefined || id === undefined
           ? undefined
           : { ...dao, id };
@@ -402,7 +432,7 @@ function SuspendableDaos() {
       <ul
         className={css({ marginTop: "1rem", "&:empty": { display: "none" } })}
       >
-        {daos.map((dao) => (
+        {daosList.map((dao) => (
           <button
             key={dao.account}
             onClick={() => setSelectedDaoId(dao.id)}

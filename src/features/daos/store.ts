@@ -1,7 +1,7 @@
 import { selectedAccountAtom } from "../accounts/store";
 import { atomWithLocalStorage } from "../jotai/utils";
 import { idle } from "@reactive-dot/core";
-import { useLazyLoadQuery } from "@reactive-dot/react";
+import { useLazyLoadQueryWithRefresh } from "@reactive-dot/react";
 import { useAtomValue, useSetAtom } from "jotai";
 
 const selectedDaoIdAtom = atomWithLocalStorage<number | undefined>(
@@ -12,7 +12,7 @@ const selectedDaoIdAtom = atomWithLocalStorage<number | undefined>(
 export function useLazyLoadSelectedDaoId() {
   const account = useAtomValue(selectedAccountAtom);
 
-  const accountCoreAssets = useLazyLoadQuery((builder) =>
+  const accountCoreAssets = useLazyLoadQueryWithRefresh((builder) =>
     account === undefined
       ? undefined
       : builder.readStorageEntries("CoreAssets", "Accounts", [account.address]),
@@ -20,14 +20,14 @@ export function useLazyLoadSelectedDaoId() {
 
   const selectedDaoId = useAtomValue(selectedDaoIdAtom);
 
-  if (accountCoreAssets === idle) {
+  if (accountCoreAssets[0] === idle) {
     return undefined;
   }
 
   return (
-    accountCoreAssets.find(
+    accountCoreAssets[0].find(
       ({ keyArgs: [_, daoId] }) => daoId === selectedDaoId,
-    ) ?? accountCoreAssets.at(0)
+    ) ?? accountCoreAssets[0].at(0)
   )?.keyArgs[1];
 }
 
