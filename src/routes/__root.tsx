@@ -35,9 +35,10 @@ import "dot-connect/font.css";
 import { ConnectionButton } from "dot-connect/react.js";
 import { PolkadotIdenticon } from "dot-identicon/react.js";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
-import { Menu, X } from "lucide-react";
+import { Menu, X, CopyIcon } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { CreateDaoDialog } from "../features/daos/components/create-dao-dialog";
+import { useNotification } from "../contexts/notification-context";
 
 registerDotConnect({ wallets: config.wallets ?? [] });
 
@@ -368,6 +369,7 @@ function SideBar({ className, onCreateDao }: SideBarProps) {
 function SuspendableDaos() {
   const account = useAtomValue(selectedAccountAtom);
   const setSelectedDaoId = useSetSelectedDaoId();
+  const { showNotification } = useNotification();
 
   if (account === undefined) {
     return null;
@@ -416,24 +418,55 @@ function SuspendableDaos() {
         className={css({ marginTop: "1rem", "&:empty": { display: "none" } })}
       >
         {daosList.map((dao) => (
-          <button
+          <div
             key={dao.account}
-            onClick={() => setSelectedDaoId(dao.id)}
             className={css({
               margin: "0 0.5rem",
+              padding: "0.25rem",
               borderRadius: "1rem",
-              width: "stretch",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
               backgroundColor:
                 dao.id === selectedDaoId ? "surfaceContainer" : undefined,
-              cursor: "pointer",
-              textAlign: "start",
             })}
           >
-            <AccountListItem
-              address={dao.account}
-              name={dao.metadata.asText()}
-            />
-          </button>
+            <button
+              onClick={() => setSelectedDaoId(dao.id)}
+              className={css({
+                flex: 1,
+                cursor: "pointer",
+                textAlign: "start",
+              })}
+            >
+              <AccountListItem
+                address={dao.account}
+                name={dao.metadata.asText()}
+              />
+            </button>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(dao.account);
+                showNotification({
+                  variant: "success",
+                  message: "DAO address copied to clipboard",
+                });
+              }}
+              className={css({
+                display: "flex",
+                alignItems: "center",
+                padding: "0.5rem",
+                borderRadius: "0.5rem",
+                color: "content.muted",
+                "&:hover": {
+                  color: "content.default",
+                  backgroundColor: "surface.hover",
+                },
+              })}
+            >
+              <CopyIcon size={16} />
+            </button>
+          </div>
         ))}
       </ul>
     );

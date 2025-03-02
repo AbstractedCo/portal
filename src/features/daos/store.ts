@@ -4,7 +4,7 @@ import { idle } from "@reactive-dot/core";
 import { useLazyLoadQueryWithRefresh } from "@reactive-dot/react";
 import { useAtomValue, useSetAtom } from "jotai";
 
-const selectedDaoIdAtom = atomWithLocalStorage<number | undefined>(
+export const selectedDaoIdAtom = atomWithLocalStorage<number | undefined>(
   "@invarch-portal/selected-dao",
   undefined,
 );
