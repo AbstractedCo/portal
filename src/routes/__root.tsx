@@ -206,11 +206,11 @@ function Navigation({ className }: NavigationProps) {
             Staking
           </Link>
         </li>
-        <li>
+        {/* <li>
           <Link to="/governance" activeProps={activeProps}>
             Governance
           </Link>
-        </li>
+        </li> */}
         <li>
           <Link to="/profile" activeProps={activeProps}>
             Profile

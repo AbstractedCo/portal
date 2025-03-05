@@ -15,7 +15,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Route as rootRoute } from './routes/__root'
 import { Route as StakingImport } from './routes/staking'
 import { Route as ProfileImport } from './routes/profile'
-import { Route as GovernanceImport } from './routes/governance'
 import { Route as IndexImport } from './routes/index'
 import { Route as DaosIndexImport } from './routes/daos/index'
 import { Route as DaosLayoutImport } from './routes/daos/_layout'
@@ -45,12 +44,6 @@ const StakingRoute = StakingImport.update({
 const ProfileRoute = ProfileImport.update({
   id: '/profile',
   path: '/profile',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const GovernanceRoute = GovernanceImport.update({
-  id: '/governance',
-  path: '/governance',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -104,13 +97,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/governance': {
-      id: '/governance'
-      path: '/governance'
-      fullPath: '/governance'
-      preLoaderRoute: typeof GovernanceImport
       parentRoute: typeof rootRoute
     }
     '/profile': {
@@ -213,7 +199,6 @@ const DaosRouteWithChildren = DaosRoute._addFileChildren(DaosRouteChildren)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/governance': typeof GovernanceRoute
   '/profile': typeof ProfileRoute
   '/staking': typeof StakingRoute
   '/daos': typeof DaosLayoutRouteWithChildren
@@ -226,7 +211,6 @@ export interface FileRoutesByFullPath {
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/governance': typeof GovernanceRoute
   '/profile': typeof ProfileRoute
   '/staking': typeof StakingRoute
   '/daos': typeof DaosIndexRoute
@@ -239,7 +223,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
-  '/governance': typeof GovernanceRoute
   '/profile': typeof ProfileRoute
   '/staking': typeof StakingRoute
   '/daos': typeof DaosRouteWithChildren
@@ -255,7 +238,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/governance'
     | '/profile'
     | '/staking'
     | '/daos'
@@ -267,7 +249,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/governance'
     | '/profile'
     | '/staking'
     | '/daos'
@@ -278,7 +259,6 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/governance'
     | '/profile'
     | '/staking'
     | '/daos'
@@ -293,7 +273,6 @@ export interface FileRouteTypes {
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  GovernanceRoute: typeof GovernanceRoute
   ProfileRoute: typeof ProfileRoute
   StakingRoute: typeof StakingRoute
   DaosRoute: typeof DaosRouteWithChildren
@@ -301,7 +280,6 @@ export interface RootRouteChildren {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  GovernanceRoute: GovernanceRoute,
   ProfileRoute: ProfileRoute,
   StakingRoute: StakingRoute,
   DaosRoute: DaosRouteWithChildren,
@@ -318,7 +296,6 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
-        "/governance",
         "/profile",
         "/staking",
         "/daos"
@@ -326,9 +303,6 @@ export const routeTree = rootRoute
     },
     "/": {
       "filePath": "index.tsx"
-    },
-    "/governance": {
-      "filePath": "governance.tsx"
     },
     "/profile": {
       "filePath": "profile.tsx"
