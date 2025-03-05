@@ -21,8 +21,8 @@ export const Route = createFileRoute("/daos/_layout/assets")({
 function AssetsPage() {
   const daoId = useLazyLoadSelectedDaoId();
 
-  if (daoId === undefined) {
-    return <p>Please select a DAO</p>;
+  if (typeof daoId !== 'number') {
+    return <p>Please select or create a DAO</p>;
   }
 
   return <SuspendableAssetsPage />;

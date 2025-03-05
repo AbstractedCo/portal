@@ -21,16 +21,89 @@ function MembersPage() {
   const daoId = useLazyLoadSelectedDaoId();
   // console.log(daoId);
 
-  if (daoId === undefined) {
-    return null;
+  if (typeof daoId !== 'number') {
+    return <p>Please select or create a DAO</p>;
   }
 
-  return <SuspendableDaoMembers daoId={daoId} />;
-}
+  return <SuspendableDaoMembers />;
 
-type SuspendableDaoMembersProps = {
-  daoId: number;
-};
+  function SuspendableDaoMembers() {
+    const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
+
+    const memberAddresses = useLazyLoadQuery((builder) =>
+      builder.readStorageEntries("INV4", "CoreMembers", [daoId!]),
+    ).map(({ keyArgs: [_, address] }) => address);
+
+    return (
+      <div className={css({
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+      })}>
+        <table className={css({ width: "stretch" })}>
+          <thead>
+            <tr>
+              <th className={css({ textAlign: "start" })}>User</th>
+              <th>Votes</th>
+              <th className={css({ visibility: "hidden" })}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {memberAddresses.map((address) => (
+              <Member key={address} daoId={daoId!} address={address} />
+            ))}
+          </tbody>
+        </table>
+
+        <Button
+          onClick={() => setAddMemberDialogOpen(true)}
+          className={css({
+            alignSelf: "flex-end",
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgb(241, 143, 123)",
+            color: "black",
+            padding: "1rem 1rem",
+            borderRadius: "0.75rem",
+            fontSize: "1rem",
+            fontWeight: "500",
+            border: "none",
+            cursor: "pointer",
+            minWidth: "160px",
+            "&:hover": {
+              backgroundColor: "rgb(241, 143, 123, 0.8)",
+            }
+          })}
+        >
+          <div style={{
+            position: "relative",
+            display: "flex",
+            alignItems: "center"
+          }}>
+            <UserPlusIcon size={20} />
+            <span style={{
+              display: "block",
+              lineHeight: "0px",
+              paddingLeft: "7px",
+              marginTop: "0px"
+            }}>
+              Add Member
+            </span>
+          </div>
+        </Button>
+
+        {addMemberDialogOpen && (
+          <AddMemberDialog
+            daoId={daoId!}
+            onClose={() => setAddMemberDialogOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
+}
 
 function AddMemberDialog({ daoId, onClose }: { daoId: number; onClose: () => void }) {
   const [address, setAddress] = useState("");
@@ -156,82 +229,7 @@ function AddMemberDialog({ daoId, onClose }: { daoId: number; onClose: () => voi
   );
 }
 
-function SuspendableDaoMembers({ daoId }: SuspendableDaoMembersProps) {
-  const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
 
-  const memberAddresses = useLazyLoadQuery((builder) =>
-    builder.readStorageEntries("INV4", "CoreMembers", [daoId]),
-  ).map(({ keyArgs: [_, address] }) => address);
-
-  return (
-    <div className={css({
-      display: "flex",
-      flexDirection: "column",
-      gap: "1rem",
-    })}>
-      <table className={css({ width: "stretch" })}>
-        <thead>
-          <tr>
-            <th className={css({ textAlign: "start" })}>User</th>
-            <th>Votes</th>
-            <th className={css({ visibility: "hidden" })}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {memberAddresses.map((address) => (
-            <Member key={address} daoId={daoId} address={address} />
-          ))}
-        </tbody>
-      </table>
-
-      <Button
-        onClick={() => setAddMemberDialogOpen(true)}
-        className={css({
-          alignSelf: "flex-end",
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgb(241, 143, 123)",
-          color: "black",
-          padding: "1rem 1rem",
-          borderRadius: "0.75rem",
-          fontSize: "1rem",
-          fontWeight: "500",
-          border: "none",
-          cursor: "pointer",
-          minWidth: "160px",
-          "&:hover": {
-            backgroundColor: "rgb(241, 143, 123, 0.8)",
-          }
-        })}
-      >
-        <div style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center"
-        }}>
-          <UserPlusIcon size={20} />
-          <span style={{
-            display: "block",
-            lineHeight: "0px",
-            paddingLeft: "7px",
-            marginTop: "0px"
-          }}>
-            Add Member
-          </span>
-        </div>
-      </Button>
-
-      {addMemberDialogOpen && (
-        <AddMemberDialog
-          daoId={daoId}
-          onClose={() => setAddMemberDialogOpen(false)}
-        />
-      )}
-    </div>
-  );
-}
 
 type MemberProps = { daoId: number; address: string };
 

@@ -20,17 +20,36 @@ declare global {
 
 export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
     const [name, setName] = useState("");
-    const [minimumSupport, setMinimumSupport] = useState(0);
-    const [requiredApproval, setRequiredApproval] = useState(0);
+    const [minimumSupport, setMinimumSupport] = useState<string>("");
+    const [requiredApproval, setRequiredApproval] = useState<string>("");
     const [isProcessing, setIsProcessing] = useState(false);
     const { showNotification } = useNotification();
 
+    // Validation function
+    const isFormValid = () => {
+        const minSupport = Number(minimumSupport);
+        const reqApproval = Number(requiredApproval);
+        return (
+            name.trim().length > 0 &&  // Check name is not empty
+            !isNaN(minSupport) && minSupport >= 0 && minSupport <= 100 &&
+            !isNaN(reqApproval) && reqApproval >= 0 && reqApproval <= 100
+        );
+    };
+
+    // Warning for 0% values
+    const showZeroWarning = () => {
+        const minSupport = Number(minimumSupport);
+        const reqApproval = Number(requiredApproval);
+        return (minSupport === 0 || reqApproval === 0) && isFormValid();
+    };
+
     // Convert percentage to perbill (0-100 -> 0-1,000,000,000)
-    const percentageToPerbill = (percentage: number) => Math.floor(percentage * 10_000_000);
+    const percentageToPerbill = (percentage: string) =>
+        Math.floor(Number(percentage) * 10_000_000);
 
     const [createDaoState, createDao] = useMutation((builder) =>
         builder.INV4.create_dao({
-            metadata: Binary.fromText(name),
+            metadata: Binary.fromText(name.trim()),
             minimum_support: percentageToPerbill(minimumSupport),
             required_approval: percentageToPerbill(requiredApproval),
             creation_fee_asset: Enum("Native"),
@@ -86,6 +105,12 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         try {
+            if (showZeroWarning()) {
+                const confirm = window.confirm(
+                    "Are you sure you want to proceed with 0% values? This might affect the DAO's governance."
+                );
+                if (!confirm) return;
+            }
             await createDao();
         } catch (error) {
             console.error("Failed to create DAO:", error);
@@ -126,34 +151,48 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                 />
                 <TextInput
                     label="Minimum Support (%)"
-                    value={minimumSupport.toString()}
+                    value={minimumSupport}
                     onChangeValue={(value) => {
-                        const num = value.replace(/[^\d]/g, '');
-                        const parsed = parseInt(num);
-                        if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
-                            setMinimumSupport(parsed);
+                        // Allow empty value or numbers only
+                        if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            const num = Number(value);
+                            if (value === "" || (num >= 0 && num <= 100)) {
+                                setMinimumSupport(value);
+                            }
                         }
                     }}
-                    placeholder="Enter minimum support percentage (0-100)"
+                    placeholder="50"
                 />
                 <TextInput
                     label="Required Approval (%)"
-                    value={requiredApproval.toString()}
+                    value={requiredApproval}
                     onChangeValue={(value) => {
-                        const num = value.replace(/[^\d]/g, '');
-                        const parsed = parseInt(num);
-                        if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
-                            setRequiredApproval(parsed);
+                        // Allow empty value or numbers only
+                        if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                            const num = Number(value);
+                            if (value === "" || (num >= 0 && num <= 100)) {
+                                setRequiredApproval(value);
+                            }
                         }
                     }}
-                    placeholder="Enter required approval percentage (0-100)"
+                    placeholder="50"
                 />
+                {showZeroWarning() && (
+                    <p className={css({
+                        color: 'warning',
+                        fontSize: '0.875rem',
+                        marginTop: '-0.5rem',
+                    })}>
+                        Warning: Setting values to 0% might affect the DAO&apos;s governance capabilities.
+                    </p>
+                )}
                 <Button
                     type="submit"
-                    disabled={createDaoState === pending || isProcessing}
+                    disabled={!isFormValid() || createDaoState === pending || isProcessing}
                     className={css({
                         marginTop: "1rem",
                         width: "stretch",
+                        opacity: !isFormValid() ? 0.5 : 1,
                     })}
                 >
                     Create DAO

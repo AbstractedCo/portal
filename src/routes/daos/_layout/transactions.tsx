@@ -17,8 +17,8 @@ export const Route = createFileRoute("/daos/_layout/transactions")({
 function TransactionsPage() {
   const daoId = useLazyLoadSelectedDaoId();
 
-  if (daoId === undefined) {
-    return null;
+  if (typeof daoId !== 'number') {
+    return <p>Please select or create a DAO</p>;
   }
 
   return <SuspendableTransactionPage daoId={daoId} />;
@@ -38,7 +38,7 @@ function SuspendableTransactionPage({
   const api = useTypedApi();
 
   if (calls.length === 0) {
-    return null;
+    return <p>No transactions are being voted on</p>;
   }
 
   return (
