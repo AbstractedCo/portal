@@ -24,13 +24,19 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
     const [requiredApproval, setRequiredApproval] = useState<string>("");
     const [isProcessing, setIsProcessing] = useState(false);
     const { showNotification } = useNotification();
+    const [showConfirmation, setShowConfirmation] = useState(false);
 
     // Validation function
     const isFormValid = () => {
+        // Empty values are invalid, user must input something
+        if (name.trim() === "" || minimumSupport === "" || requiredApproval === "") {
+            return false;
+        }
+
         const minSupport = Number(minimumSupport);
         const reqApproval = Number(requiredApproval);
+
         return (
-            name.trim().length > 0 &&  // Check name is not empty
             !isNaN(minSupport) && minSupport >= 0 && minSupport <= 100 &&
             !isNaN(reqApproval) && reqApproval >= 0 && reqApproval <= 100
         );
@@ -38,8 +44,12 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
 
     // Warning for 0% values
     const showZeroWarning = () => {
+        if (requiredApproval === "") {
+            const reqApproval = Number(51);
+            return (reqApproval < 51) && isFormValid();
+        }
         const reqApproval = Number(requiredApproval);
-        return (reqApproval === 0) && isFormValid();
+        return (reqApproval < 51) && isFormValid();
     };
 
     // Convert percentage to perbill (0-100 -> 0-1,000,000,000)
@@ -105,10 +115,8 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
         event.preventDefault();
         try {
             if (showZeroWarning()) {
-                const confirm = window.confirm(
-                    "Are you sure you want to proceed with 0% values? This might affect the DAO's governance."
-                );
-                if (!confirm) return;
+                setShowConfirmation(true);
+                return;
             }
             await createDao();
         } catch (error) {
@@ -121,101 +129,165 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
     };
 
     return (
-        <ModalDialog
-            title="Create DAO"
-            onClose={onClose}
-            className={css({
-                containerType: "inline-size",
-                width: `min(34rem, 100dvw)`,
-            })}
-        >
-            <form
-                onSubmit={handleSubmit}
+        <>
+            <ModalDialog
+                title="Create DAO"
+                onClose={onClose}
                 className={css({
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1.5rem",
-                    alignItems: "center",
-                    textAlign: "left",
-                    "& > *": {
-                        width: "100%",
-                    }
+                    containerType: "inline-size",
+                    width: `min(34rem, 100dvw)`,
                 })}
             >
-                <TextInput
-                    label={
-                        <>
-                            DAO Name
-                            <br />
-                            What would you like your business, organization, or community to be called?
-                        </>
-                    }
-                    value={name}
-                    onChangeValue={setName}
-                    placeholder="Enter DAO name"
-                />
-                <TextInput
-                    label={
-                        <>
-                            Minimum Support (%)
-                            <br />
-                            What&apos;s the minimal voter turnout required for a proposal to pass?
-                        </>
-                    }
-                    value={minimumSupport}
-                    onChangeValue={(value) => {
-                        // Allow empty value or numbers only
-                        if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                            const num = Number(value);
-                            if (value === "" || (num >= 0 && num <= 100)) {
-                                setMinimumSupport(value);
-                            }
-                        }
-                    }}
-                    placeholder="51"
-                />
-                <TextInput
-                    label={
-                        <>
-                            Minimum Approval (%)
-                            <br />
-                            What&apos;s the minimum share of votes required for a proposal to pass?
-                        </>
-                    }
-                    value={requiredApproval}
-                    onChangeValue={(value) => {
-                        // Allow empty value or numbers only
-                        if (value === "" || /^\d*\.?\d*$/.test(value)) {
-                            const num = Number(value);
-                            if (value === "" || (num >= 0 && num <= 100)) {
-                                setRequiredApproval(value);
-                            }
-                        }
-                    }}
-                    placeholder="51"
-                />
-                {showZeroWarning() && (
-                    <p className={css({
-                        color: 'warning',
-                        fontSize: '0.875rem',
-                        marginTop: '-0.5rem',
-                        textAlign: 'center',
-                    })}>
-                        Pro-tip: Set the Minimum Approval (%) to at least 51 to ensure a majority is needed to pass proposals, and avoid setting any values to 0 as they might negatively affect the DAO&apos;s governance capabilities.
-                    </p>
-                )}
-                <Button
-                    type="submit"
-                    disabled={!isFormValid() || createDaoState === pending || isProcessing}
+                <form
+                    onSubmit={handleSubmit}
                     className={css({
-                        marginTop: "1rem",
-                        width: "stretch",
-                        opacity: !isFormValid() ? 0.5 : 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "1.5rem",
+                        alignItems: "center",
+                        textAlign: "left",
+                        "& > *": {
+                            width: "100%",
+                        }
                     })}
                 >
-                    Create DAO
-                </Button>
-            </form>
-        </ModalDialog>
+                    <TextInput
+                        label={
+                            <>
+                                DAO Name
+                                <br />
+                                What would you like your business, organization, or community to be called?
+                            </>
+                        }
+                        value={name}
+                        onChangeValue={setName}
+                        placeholder="Enter DAO name"
+                    />
+                    <TextInput
+                        label={
+                            <>
+                                Minimum Support (%)
+                                <br />
+                                What&apos;s the minimal voter turnout required for a proposal to pass?
+                            </>
+                        }
+                        value={minimumSupport}
+                        onChangeValue={(value) => {
+                            // Allow empty value or numbers only
+                            if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                                const num = Number(value);
+                                if (value === "" || (num >= 0 && num <= 100)) {
+                                    setMinimumSupport(value);
+                                }
+                            }
+                        }}
+                        placeholder="51"
+                    />
+                    <TextInput
+                        label={
+                            <>
+                                Minimum Approval (%)
+                                <br />
+                                What&apos;s the minimum share of votes required for a proposal to pass?
+                            </>
+                        }
+                        value={requiredApproval}
+                        onChangeValue={(value) => {
+                            // Allow empty value or numbers only
+                            if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                                const num = Number(value);
+                                if (value === "" || (num >= 0 && num <= 100)) {
+                                    setRequiredApproval(value);
+                                }
+                            }
+                        }}
+                        placeholder="51"
+                    />
+                    {showZeroWarning() && (
+                        <p className={css({
+                            color: 'warning',
+                            fontSize: '0.875rem',
+                            marginTop: '-0.5rem',
+                            textAlign: 'center',
+                        })}>
+                            Pro-tip: Set the Minimum Approval (%) to at least 51 to ensure a majority is needed to pass proposals, and avoid setting any values to 0 as they might negatively affect the DAO&apos;s governance capabilities.
+                        </p>
+                    )}
+                    <Button
+                        type="submit"
+                        disabled={!isFormValid() || createDaoState === pending || isProcessing}
+                        className={css({
+                            marginTop: "1rem",
+                            width: "stretch",
+                            opacity: !isFormValid() ? 0.5 : 1,
+                        })}
+                    >
+                        Create DAO
+                    </Button>
+                </form>
+            </ModalDialog>
+
+            {showConfirmation && (
+                <ModalDialog
+                    title="Confirm DAO Settings"
+                    onClose={() => setShowConfirmation(false)}
+                    className={css({
+                        containerType: "inline-size",
+                        width: `min(34rem, 100dvw)`,
+                    })}
+                >
+                    <div className={css({
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1.5rem',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                    })}>
+                        <p className={css({
+                            color: 'warning',
+                            fontSize: '1rem',
+                            lineHeight: '1.5',
+                        })}>
+                            You are about to create a DAO with approval settings below 51%.
+                            This means proposals can pass without majority support, which
+                            might affect the DAO&apos;s governance capabilities.
+                            <br /><br />
+                            Are you sure you want to proceed?
+                        </p>
+                        <div className={css({
+                            display: 'flex',
+                            gap: '1rem',
+                            width: '100%',
+                            justifyContent: 'center',
+                        })}>
+                            <Button
+                                onClick={async () => {
+                                    setShowConfirmation(false);
+                                    await createDao();
+                                }}
+                                className={css({
+                                    backgroundColor: 'warning',
+                                    color: 'black',
+                                    '&:hover': {
+                                        backgroundColor: 'warningHover',
+                                    },
+                                })}
+                            >
+                                Yes, proceed anyway
+                            </Button>
+                            <Button
+                                onClick={() => setShowConfirmation(false)}
+                                className={css({
+                                    backgroundColor: 'surface',
+                                    color: 'onSurface',
+                                })}
+                            >
+                                No, let me adjust
+                            </Button>
+                        </div>
+                    </div>
+                </ModalDialog>
+            )}
+        </>
     );
 }
