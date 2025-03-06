@@ -38,9 +38,8 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
 
     // Warning for 0% values
     const showZeroWarning = () => {
-        const minSupport = Number(minimumSupport);
         const reqApproval = Number(requiredApproval);
-        return (minSupport === 0 || reqApproval === 0) && isFormValid();
+        return (reqApproval === 0) && isFormValid();
     };
 
     // Convert percentage to perbill (0-100 -> 0-1,000,000,000)
@@ -137,20 +136,32 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                     flexDirection: "column",
                     gap: "1.5rem",
                     alignItems: "center",
-                    textAlign: "center",
+                    textAlign: "left",
                     "& > *": {
                         width: "100%",
                     }
                 })}
             >
                 <TextInput
-                    label="DAO Name"
+                    label={
+                        <>
+                            DAO Name
+                            <br />
+                            What would you like your business, organization, or community to be called?
+                        </>
+                    }
                     value={name}
                     onChangeValue={setName}
                     placeholder="Enter DAO name"
                 />
                 <TextInput
-                    label="Minimum Support (%)"
+                    label={
+                        <>
+                            Minimum Support (%)
+                            <br />
+                            What&apos;s the minimal voter turnout required for a proposal to pass?
+                        </>
+                    }
                     value={minimumSupport}
                     onChangeValue={(value) => {
                         // Allow empty value or numbers only
@@ -161,10 +172,16 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                             }
                         }
                     }}
-                    placeholder="50"
+                    placeholder="51"
                 />
                 <TextInput
-                    label="Required Approval (%)"
+                    label={
+                        <>
+                            Minimum Approval (%)
+                            <br />
+                            What&apos;s the minimum share of votes required for a proposal to pass?
+                        </>
+                    }
                     value={requiredApproval}
                     onChangeValue={(value) => {
                         // Allow empty value or numbers only
@@ -175,15 +192,16 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                             }
                         }
                     }}
-                    placeholder="50"
+                    placeholder="51"
                 />
                 {showZeroWarning() && (
                     <p className={css({
                         color: 'warning',
                         fontSize: '0.875rem',
                         marginTop: '-0.5rem',
+                        textAlign: 'center',
                     })}>
-                        Warning: Setting values to 0% might affect the DAO&apos;s governance capabilities.
+                        Pro-tip: Set the Minimum Approval (%) to at least 51 to ensure a majority is needed to pass proposals, and avoid setting any values to 0 as they might negatively affect the DAO&apos;s governance capabilities.
                     </p>
                 )}
                 <Button
