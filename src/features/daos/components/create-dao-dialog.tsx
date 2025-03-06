@@ -42,14 +42,10 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
         );
     };
 
-    // Warning for 0% values
+    // Warning for < 51% values
     const showZeroWarning = () => {
-        if (requiredApproval === "") {
-            const reqApproval = Number(51);
-            return (reqApproval < 51) && isFormValid();
-        }
-        const reqApproval = Number(requiredApproval);
-        return (reqApproval < 51) && isFormValid();
+        const reqApproval = requiredApproval === "" ? 51 : Number(requiredApproval);
+        return reqApproval < 51 && isFormValid();
     };
 
     // Convert percentage to perbill (0-100 -> 0-1,000,000,000)
