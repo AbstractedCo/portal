@@ -11,6 +11,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Trash2Icon, UserPlusIcon } from "lucide-react";
 import { useState } from "react";
 import { useNotification } from "../../../contexts/notification-context";
+import { AccountVote } from '../../../features/daos/components/account-vote'
 
 export const Route = createFileRoute("/daos/_layout/members")({
   component: MembersPage,
@@ -40,12 +41,29 @@ function MembersPage() {
         flexDirection: "column",
         gap: "1rem",
       })}>
-        <table className={css({ width: "stretch" })}>
+        <table className={css({ width: "stretch", borderCollapse: "collapse" })}>
           <thead>
             <tr>
-              <th className={css({ textAlign: "start" })}>User</th>
-              <th>Votes</th>
-              <th className={css({ visibility: "hidden" })}>Actions</th>
+              <th className={css({
+                textAlign: "left",
+                padding: "1rem",
+                width: "50%"
+              })}>User</th>
+              <th className={css({
+                textAlign: "right",
+                padding: "1rem",
+                width: "25%"
+              })}>Voting Tokens</th>
+              <th className={css({
+                textAlign: "right",
+                padding: "1rem",
+                width: "25%"
+              })}>Vote Strength (%)</th>
+              <th className={css({
+                textAlign: "center",
+                padding: "1rem",
+                width: "100px"
+              })}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -229,8 +247,6 @@ function AddMemberDialog({ daoId, onClose }: { daoId: number; onClose: () => voi
   );
 }
 
-
-
 type MemberProps = { daoId: number; address: string };
 
 function Member({ daoId, address }: MemberProps) {
@@ -297,10 +313,12 @@ function Member({ daoId, address }: MemberProps) {
         <td>
           <AccountListItem address={address} />
         </td>
-        <td className={css({ textAlign: "center" })}>
-          <AccountVote daoId={daoId} address={address} />
-        </td>
-        <td className={css({ textAlign: "center" })}>
+        <AccountVote daoId={daoId} address={address} />
+        <td className={css({
+          textAlign: "center",
+          padding: "1rem",
+          width: "100px"
+        })}>
           {removeMemberState === pending ? (
             <CircularProgressIndicator />
           ) : (
@@ -359,14 +377,4 @@ function Member({ daoId, address }: MemberProps) {
       )}
     </>
   );
-}
-
-type AccountVoteProps = { daoId: number; address: string };
-
-function AccountVote({ daoId, address }: AccountVoteProps) {
-  const balance = useLazyLoadQuery((builder) =>
-    builder.readStorage("CoreAssets", "Accounts", [address, daoId]),
-  );
-
-  return balance.free.toLocaleString();
 }
