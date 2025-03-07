@@ -6,6 +6,10 @@ import {
   Outlet,
   useLocation,
 } from "@tanstack/react-router";
+import { DenominatedNumber } from "@reactive-dot/utils";
+import { useAccountBalance, useDaoBalance } from "../../features/accounts/store";
+
+const DECIMALS = 12;
 
 export const Route = createFileRoute("/daos/_layout")({
   component: Layout,
@@ -13,6 +17,14 @@ export const Route = createFileRoute("/daos/_layout")({
 
 function Layout() {
   const location = useLocation();
+  const personalBalance = useAccountBalance();
+  const daoBalance = useDaoBalance();
+
+  const formatDenominated = (balance: bigint) => {
+    if (!balance) return "--";
+    return new DenominatedNumber(balance, DECIMALS, "VARCH").toLocaleString();
+  };
+
   return (
     <div
       className={css({
@@ -29,7 +41,9 @@ function Layout() {
           display: "contents",
           "@media(min-width: 64rem)": {
             flex: "0 0 20rem",
-            display: "revert",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
             position: "sticky",
             top: 0,
             height: "fit-content",
@@ -43,7 +57,7 @@ function Layout() {
             padding: "2rem",
           })}
         >
-          <header className={css({ fontWeight: "bold" })}>My balance</header>
+          <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>Personal Assets</header>
           <dl
             className={css({
               display: "grid",
@@ -64,54 +78,55 @@ function Layout() {
               },
             })}
           >
-            <dt>Total portfolio value</dt>
-            <dd>$--</dd>
-            <dt>Transferrable balance</dt>
-            <dd>$--</dd>
-            <dt>Non-transferable balance</dt>
-            <dd>$--</dd>
+            <dt>Available Balance</dt>
+            <dd>{formatDenominated(personalBalance.free)}</dd>
+            {/* <dt>Reserved Balance</dt>
+            <dd>{formatDenominated(personalBalance.reserved)}</dd>
+            <dt>Frozen Balance</dt>
+            <dd>{formatDenominated(personalBalance.frozen)}</dd>
+            <dt>Total Balance</dt>
+            <dd>{formatDenominated(personalBalance.free + personalBalance.reserved)}</dd> */}
           </dl>
         </article>
-        {/* <article
+
+        <article
           className={css({
             backgroundColor: "surfaceContainer",
             borderRadius: "1rem",
             padding: "2rem",
           })}
         >
-          <header>Send KSM</header>
-          <div
+          <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>DAO Assets</header>
+          <dl
             className={css({
-              display: "flex",
-              alignItems: "center",
-              "& label": { display: "flex", alignItems: "center" },
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) max-content",
+              "& dt": {
+                borderBottom: "0.25px solid {colors.outlineVariant}",
+                padding: "1rem 1rem 1rem 0",
+                color: "content.muted",
+              },
+              "& dd": {
+                padding: "1rem 0 1rem 1rem",
+                borderBottom: "1.5px solid {colors.outline}",
+                textAlign: "end",
+              },
+              "& :is(dd, dt):last-of-type": {
+                borderWidth: 0,
+                paddingBottom: 0,
+              },
             })}
           >
-            <label>
-              from{" "}
-              <Select
-                value="kusama"
-                options={[{ value: "kusama", label: "Kusama" }]}
-                onChangeValue={() => {}}
-              />
-            </label>
-            <label>
-              to{" "}
-              <Select
-                value="kusama"
-                options={[{ value: "kusama", label: "Kusama" }]}
-                onChangeValue={() => {}}
-              />
-            </label>
-          </div>
-          <TextInput
-            value=""
-            onChangeValue={() => {}}
-            label="Recipient"
-            placeholder="Destination address"
-          />
-          <Button>Perform transaction</Button>
-        </article> */}
+            <dt>Free Native Balance</dt>
+            <dd>{formatDenominated(daoBalance.free)}</dd>
+            {/* <dt>Reserved Native Balance</dt>
+            <dd>{formatDenominated(daoBalance.reserved)}</dd>
+            <dt>Frozen Native Balance</dt>
+            <dd>{formatDenominated(daoBalance.frozen)}</dd>
+            <dt>Total Native Balance</dt>
+            <dd>{formatDenominated(daoBalance.free + daoBalance.reserved)}</dd> */}
+          </dl>
+        </article>
       </div>
       <div
         className={css({
