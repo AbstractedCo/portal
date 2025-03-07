@@ -35,7 +35,7 @@ import "dot-connect/font.css";
 import { ConnectionButton } from "dot-connect/react.js";
 import { PolkadotIdenticon } from "dot-identicon/react.js";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
-import { Menu, X, CopyIcon } from "lucide-react";
+import { Menu, X, CopyIcon, ExternalLink } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { CreateDaoDialog } from "../features/daos/components/create-dao-dialog";
 import { useNotification } from "../contexts/notification-context";
@@ -202,9 +202,24 @@ function Navigation({ className }: NavigationProps) {
           </Link>
         </li>
         <li>
-          <Link to="/staking" activeProps={activeProps}>
+          <a
+            href="https://portal.invarch.network/staking"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={css({
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              color: 'inherit',
+              textDecoration: 'none',
+              '&:hover': {
+                color: 'primary'
+              }
+            })}
+          >
             Staking
-          </Link>
+            <ExternalLink size={14} />
+          </a>
         </li>
         {/* <li>
           <Link to="/governance" activeProps={activeProps}>

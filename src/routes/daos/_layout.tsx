@@ -65,11 +65,11 @@ function Layout() {
             })}
           >
             <dt>Total portfolio value</dt>
-            <dd>$69.96</dd>
+            <dd>$--</dd>
             <dt>Transferrable balance</dt>
-            <dd>$69.96</dd>
+            <dd>$--</dd>
             <dt>Non-transferable balance</dt>
-            <dd>$69.96</dd>
+            <dd>$--</dd>
           </dl>
         </article>
         {/* <article
