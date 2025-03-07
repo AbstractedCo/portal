@@ -3,10 +3,12 @@ import { ModalDialog } from "../../../components/modal-dialog";
 import { Button } from "../../../components/button";
 import { TextInput } from "../../../components/text-input";
 import { useState } from "react";
-import { useMutation, useMutationEffect } from "@reactive-dot/react";
+import { useLazyLoadQuery, useMutation, useMutationEffect } from "@reactive-dot/react";
 import { Binary, Enum } from "polkadot-api";
 import { MutationError, pending } from "@reactive-dot/core";
 import { useNotification } from "../../../contexts/notification-context";
+import { selectedAccountAtom } from "../../../features/accounts/store";
+import { useAtomValue } from "jotai";
 
 type CreateDaoDialogProps = {
     onClose: () => void;
@@ -18,7 +20,26 @@ declare global {
     }
 }
 
+// Constants adjusted for 12 decimals
+const DECIMALS = 12;
+const MILLIUNIT = 1_000_000_000n; // ED in chain units
+const EXISTENTIAL_DEPOSIT = MILLIUNIT; // Already in chain units
+const DAO_CREATION_COST = 5000n * BigInt(10 ** DECIMALS); // Convert 5000 VARCH to chain units
+const REQUIRED_BUFFER = EXISTENTIAL_DEPOSIT * 2n; // Double ED as buffer
+
 export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
+    const selectedAccount = useAtomValue(selectedAccountAtom);
+    const nativeBalance = useLazyLoadQuery((builder) =>
+        builder.readStorage("System", "Account", [
+            selectedAccount!.address,
+        ]),
+    ).data.free;
+
+    // Format balance to a readable number
+    const formatBalance = (balance: bigint) => {
+        return Number(balance) / Math.pow(10, DECIMALS);
+    };
+
     const [name, setName] = useState("");
     const [minimumSupport, setMinimumSupport] = useState<string>("");
     const [requiredApproval, setRequiredApproval] = useState<string>("");
@@ -134,6 +155,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                     width: `min(34rem, 100dvw)`,
                 })}
             >
+
                 <form
                     onSubmit={handleSubmit}
                     className={css({
@@ -209,13 +231,55 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                             Pro-tip: Set the Minimum Approval (%) to at least 51 to ensure a majority is needed to pass proposals, and avoid setting any values to 0 as they might negatively affect the DAO&apos;s governance capabilities.
                         </p>
                     )}
+                    <div className={css({
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.5rem",
+                    })}>
+                        <div className={css({
+                            display: "flex",
+                            flexDirection: "column",
+                            backgroundColor: "surface",
+                            borderRadius: "0.5rem",
+                            margin: "0 auto",
+                            width: "fit-content",
+                            minWidth: "200px",
+                        })}>
+                            <p className={css({
+                                color: "content.default",
+                                fontSize: "0.875rem",
+                                textAlign: "center",
+                            })}>
+                                Creation cost: 5000 VARCH
+                            </p>
+                            <p className={css({
+                                color: "content.muted",
+                                fontSize: "0.75rem",
+                                textAlign: "center",
+                            })}>
+                                Your balance: {nativeBalance
+                                    ? `${formatBalance(nativeBalance).toLocaleString()} VARCH`
+                                    : "Loading..."}
+                            </p>
+                            {typeof nativeBalance !== 'undefined' && nativeBalance < (DAO_CREATION_COST + REQUIRED_BUFFER) && (
+                                <p className={css({
+                                    color: "error",
+                                    fontSize: "0.75rem",
+                                    textAlign: "center",
+                                    paddingTop: "0.25rem",
+                                })}>
+                                    {`Insufficient balance. You need ${formatBalance(DAO_CREATION_COST + REQUIRED_BUFFER - nativeBalance).toLocaleString()} more VARCH (including ${formatBalance(REQUIRED_BUFFER).toLocaleString()} VARCH minimum balance requirement)`}
+                                </p>
+                            )}
+                        </div>
+                    </div>
                     <Button
                         type="submit"
-                        disabled={!isFormValid() || createDaoState === pending || isProcessing}
+                        disabled={!isFormValid() || createDaoState === pending || isProcessing || (typeof nativeBalance !== 'undefined' && nativeBalance < (DAO_CREATION_COST + REQUIRED_BUFFER))}
                         className={css({
                             marginTop: "1rem",
                             width: "stretch",
-                            opacity: !isFormValid() ? 0.5 : 1,
+                            opacity: !isFormValid() || (typeof nativeBalance !== 'undefined' && nativeBalance < (DAO_CREATION_COST + REQUIRED_BUFFER)) ? 0.5 : 1,
                         })}
                     >
                         Create DAO
