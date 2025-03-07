@@ -1,9 +1,8 @@
 import { atomWithLocalStorage } from "../jotai/utils";
 import type { WalletAccount } from "@reactive-dot/core/wallets.js";
 import { atom, useAtomValue } from "jotai";
-import { useLazyLoadQueryWithRefresh } from "@reactive-dot/react";
+import { useLazyLoadQuery } from "@reactive-dot/react";
 import { selectedDaoIdAtom } from "../daos/store";
-import { useQueryRefresh } from "../../hooks/useQueryRefresh";
 
 export const accountsAtom = atom<WalletAccount[]>([]);
 
@@ -44,13 +43,9 @@ export function useAccountBalance() {
   const isFallback = !selectedAccount;
   const queryAddress = selectedAccount?.address ?? FALLBACK_ADDRESS;
 
-  const [result, refresh] = useLazyLoadQueryWithRefresh((builder) =>
+  const result = useLazyLoadQuery((builder) =>
     builder.readStorage("System", "Account", [queryAddress])
   );
-
-  useQueryRefresh(async () => {
-    await refresh();
-  });
 
   if (isFallback) {
     return EMPTY_BALANCE;
@@ -65,22 +60,18 @@ export function useDaoBalance() {
   let isFallback = selectedDaoId === undefined;
 
   // First query in the queue
-  const [coreStorage, refreshCoreStorage] = useLazyLoadQueryWithRefresh((builder) =>
+  const coreStorage = useLazyLoadQuery((builder) =>
     builder.readStorage("INV4", "CoreStorage", [selectedDaoId ?? 0])
   );
 
+  // Update fallback state if we don't have a DAO account
+  isFallback = isFallback || !coreStorage?.account;
   const daoAddress = coreStorage?.account ?? FALLBACK_ADDRESS;
 
   // Second query in the queue
-  const [result, refreshBalance] = useLazyLoadQueryWithRefresh((builder) =>
+  const result = useLazyLoadQuery((builder) =>
     builder.readStorage("System", "Account", [daoAddress])
   );
-
-  useQueryRefresh(async () => {
-    await Promise.all([refreshCoreStorage(), refreshBalance()]);
-  });
-
-  isFallback = isFallback || !coreStorage?.account;
 
   if (isFallback) {
     return EMPTY_BALANCE;

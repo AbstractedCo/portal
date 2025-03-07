@@ -8,7 +8,7 @@ import { selectedAccountAtom } from "../../accounts/store";
 import { SuspendableAccountTotalStake } from "./account-stake";
 import { ManageStakingDialog } from "./manage-staking-dialog";
 import {
-  useLazyLoadQueryWithRefresh,
+  useLazyLoadQuery,
   useNativeTokenAmountFromPlanck,
 } from "@reactive-dot/react";
 import { BigIntMath } from "@reactive-dot/utils";
@@ -16,7 +16,6 @@ import request, { gql } from "graphql-request";
 import { useAtomValue } from "jotai";
 import { Suspense, useMemo, useState } from "react";
 import { use } from "react18-use";
-import { useQueryRefresh } from "../../../hooks/useQueryRefresh";
 
 export function RegisteredDaos() {
   return (
@@ -27,16 +26,12 @@ export function RegisteredDaos() {
 }
 
 export function SuspendableRegisteredDaos() {
-  const [ocifCores, refreshCores] = useLazyLoadQueryWithRefresh((builder) =>
+  const ocifCores = useLazyLoadQuery((builder) =>
     builder.readStorageEntries("OcifStaking", "RegisteredCore", []),
   );
 
   const [_search, setSearch] = useState("");
   const search = _search.trim();
-
-  useQueryRefresh(async () => {
-    await refreshCores();
-  });
 
   return (
     <section>
@@ -227,14 +222,9 @@ type CoreMemberCountProps = {
 };
 
 function SuspendableCoreMemberCount({ daoId }: CoreMemberCountProps) {
-  const [members, refreshMembers] = useLazyLoadQueryWithRefresh((builder) =>
+  const members = useLazyLoadQuery((builder) =>
     builder.readStorageEntries("INV4", "CoreMembers", [daoId]),
   );
-
-  useQueryRefresh(async () => {
-    await refreshMembers();
-  });
-
   return members.length;
 }
 
@@ -246,17 +236,13 @@ type CoreInfoProps = {
 function SuspendableCoreInfo({ daoId, className }: CoreInfoProps) {
   const account = useAtomValue(selectedAccountAtom);
 
-  const [currentEra, refreshCurrentEra] = useLazyLoadQueryWithRefresh((builder) =>
+  const currentEra = useLazyLoadQuery((builder) =>
     builder.readStorage("OcifStaking", "CurrentEra", []),
   );
 
-  const [stake, refreshStake] = useLazyLoadQueryWithRefresh((builder) =>
+  const stake = useLazyLoadQuery((builder) =>
     builder.readStorage("OcifStaking", "CoreEraStake", [daoId, currentEra]),
   );
-
-  useQueryRefresh(async () => {
-    await Promise.all([refreshCurrentEra(), refreshStake()]);
-  });
 
   const nativeToken = useNativeTokenAmountFromPlanck();
 
@@ -393,21 +379,15 @@ function SuspendableCoreInfo({ daoId, className }: CoreInfoProps) {
     );
 
     function SuspendableSupportShare() {
-      const [currentEra, refreshCurrentEra] = useLazyLoadQueryWithRefresh((builder) =>
+      const currentEra = useLazyLoadQuery((builder) =>
         builder.readStorage("OcifStaking", "CurrentEra", []),
       );
 
-      const [results, refreshResults] = useLazyLoadQueryWithRefresh((builder) =>
+      const [eraInfo, coreStake] = useLazyLoadQuery((builder) =>
         builder
           .readStorage("OcifStaking", "GeneralEraInfo", [currentEra])
           .readStorage("OcifStaking", "CoreEraStake", [daoId, currentEra]),
       );
-
-      useQueryRefresh(async () => {
-        await Promise.all([refreshCurrentEra(), refreshResults()]);
-      });
-
-      const [eraInfo, coreStake] = results;
 
       const getNativeTokenAmount = useNativeTokenAmountFromPlanck();
 
@@ -436,24 +416,18 @@ function SuspendableCoreInfo({ daoId, className }: CoreInfoProps) {
     );
 
     function SuspendableSupportThreshold() {
-      const [results, refreshResults] = useLazyLoadQueryWithRefresh((builder) =>
+      const [_activeThreshold, currentEra] = useLazyLoadQuery((builder) =>
         builder
           .getConstant("OcifStaking", "StakeThresholdForActiveDao")
           .readStorage("OcifStaking", "CurrentEra", []),
       );
 
-      const [_activeThreshold, currentEra] = results;
-
-      const [coreStake, refreshCoreStake] = useLazyLoadQueryWithRefresh((builder) =>
+      const coreStake = useLazyLoadQuery((builder) =>
         builder.readStorage("OcifStaking", "CoreEraStake", [
           daoId,
           currentEra,
         ]),
       );
-
-      useQueryRefresh(async () => {
-        await Promise.all([refreshResults(), refreshCoreStake()]);
-      });
 
       const coreTotalStake = useNativeTokenAmountFromPlanck(
         coreStake?.total ?? 0n,

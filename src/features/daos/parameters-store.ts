@@ -3,7 +3,6 @@ import { useLazyLoadQueryWithRefresh } from '@reactive-dot/react'
 import { useAtomValue } from 'jotai'
 import { idle } from '@reactive-dot/core'
 import { selectedAccountAtom } from '../accounts/store'
-import { useQueryRefresh } from "../../hooks/useQueryRefresh";
 
 // interface DaoInfo {
 //     metadata: string
@@ -33,15 +32,11 @@ export function useLazyLoadDaoInfo() {
     const account = useAtomValue(selectedAccountAtom)
     const selectedDaoId = useAtomValue(selectedDaoIdAtom)
 
-    const [daoInfo, refresh] = useLazyLoadQueryWithRefresh((builder) =>
+    const [daoInfo] = useLazyLoadQueryWithRefresh((builder) =>
         account === undefined || selectedDaoId === undefined
             ? undefined
             : builder.readStorage('INV4', 'CoreStorage', [selectedDaoId])
     )
-
-    useQueryRefresh(async () => {
-        await refresh()
-    })
 
     if (!daoInfo || daoInfo === idle) {
         return undefined
