@@ -39,6 +39,7 @@ import { Menu, X, CopyIcon, ExternalLink } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { CreateDaoDialog } from "../features/daos/components/create-dao-dialog";
 import { useNotification } from "../contexts/notification-context";
+import { ModalDialog } from "../components/modal-dialog";
 
 registerDotConnect({ wallets: config.wallets ?? [] });
 
@@ -276,36 +277,112 @@ function TopBar({ className }: TopBarProps) {
 
 function AccountSelect() {
   const connectedWallets = useConnectedWallets();
+  const [showDialog, setShowDialog] = useState(false);
+  const [selectedAccount] = useAtom(selectedAccountIdAtom);
+
+  useEffect(() => {
+    if (connectedWallets.length > 0 && !selectedAccount) {
+      setShowDialog(true);
+    }
+  }, [connectedWallets.length, selectedAccount]);
 
   if (connectedWallets.length === 0) {
     return null;
   }
 
   return (
-    <Suspense fallback={<CircularProgressIndicator />}>
-      <SuspendableAccountSelect />
-    </Suspense>
+    <>
+      <Suspense fallback={<CircularProgressIndicator />}>
+        <InnerAccountSelect />
+      </Suspense>
+      {showDialog && (
+        <Suspense fallback={<CircularProgressIndicator />}>
+          <AccountSelectDialog onClose={() => setShowDialog(false)} />
+        </Suspense>
+      )}
+    </>
   );
+}
 
-  function SuspendableAccountSelect() {
-    const accounts = useAccounts();
-    const [selectedAccount, setSelectedAccount] = useAtom(
-      selectedAccountIdAtom,
-    );
+function InnerAccountSelect() {
+  const accounts = useAccounts();
+  const [selectedAccount, setSelectedAccount] = useAtom(selectedAccountIdAtom);
 
-    return (
-      <Select
-        value={selectedAccount}
-        onChangeValue={setSelectedAccount}
-        options={accounts.map((account) => ({
-          value: account.wallet.id + account.address,
-          label: account.name ?? account.address,
-          icon: <PolkadotIdenticon address={account.address} />,
-        }))}
-        placeholder="Select an account"
-      />
-    );
-  }
+  return (
+    <Select
+      value={selectedAccount}
+      onChangeValue={setSelectedAccount}
+      options={accounts.map((account) => ({
+        value: account.wallet.id + account.address,
+        label: account.name ?? account.address,
+        icon: <PolkadotIdenticon address={account.address} />,
+      }))}
+      placeholder="Please select an account"
+    />
+  );
+}
+
+function AccountSelectDialog({ onClose }: { onClose: () => void }) {
+  const accounts = useAccounts();
+  const [_, setSelectedAccount] = useAtom(selectedAccountIdAtom);
+
+  return (
+    <ModalDialog
+      title="Select an Account"
+      onClose={onClose}
+      className={css({
+        containerType: "inline-size",
+        width: `min(18rem, 100dvw)`,
+      })}
+    >
+      <div className={css({
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1rem'
+      })}>
+        <p className={css({ color: 'content.muted' })}>
+          Please select an account
+        </p>
+        <div className={css({
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem'
+        })}>
+          {accounts.map((account) => (
+            <Button
+              key={account.wallet.id + account.address}
+              onClick={() => {
+                setSelectedAccount(account.wallet.id + account.address);
+                onClose();
+              }}
+              className={css({
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.75rem',
+                width: '100%',
+                backgroundColor: 'surface',
+                '&:hover': { backgroundColor: 'surfaceHover' }
+              })}
+            >
+              <PolkadotIdenticon address={account.address} size={24} />
+              <span
+                className={css({
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  lineHeight: '24px',
+                  paddingLeft: '0.5rem',
+                  transform: 'translateY(-6px)',
+                })}
+              >
+                {account.name ?? account.address}
+              </span>
+            </Button>
+          ))}
+        </div>
+      </div>
+    </ModalDialog>
+  );
 }
 
 type SideBarProps = {
@@ -315,6 +392,7 @@ type SideBarProps = {
 
 function SideBar({ className, onCreateDao }: SideBarProps) {
   const [sideBarOpen, setSideBarOpen] = useAtom(sideBarOpenAtom);
+  const selectedAccount = useAtomValue(selectedAccountAtom);
 
   return (
     <aside
@@ -369,9 +447,12 @@ function SideBar({ className, onCreateDao }: SideBarProps) {
         <SuspendableDaos />
         <Button
           onClick={onCreateDao}
+          disabled={!selectedAccount}
           className={css({
             margin: "1rem",
             width: "stretch",
+            opacity: selectedAccount ? 1 : 0.5,
+            cursor: selectedAccount ? 'pointer' : 'not-allowed',
           })}
         >
           Create DAO
