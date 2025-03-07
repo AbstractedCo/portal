@@ -222,6 +222,26 @@ function Navigation({ className }: NavigationProps) {
             <ExternalLink size={14} />
           </a>
         </li>
+        <li>
+          <a
+            href="https://github.com/AbstractedCo/portal/blob/main/ROADMAP.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={css({
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              color: 'inherit',
+              textDecoration: 'none',
+              '&:hover': {
+                color: 'primary'
+              }
+            })}
+          >
+            Roadmap
+            <ExternalLink size={14} />
+          </a>
+        </li>
         {/* <li>
           <Link to="/governance" activeProps={activeProps}>
             Governance
