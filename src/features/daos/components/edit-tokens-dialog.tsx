@@ -10,6 +10,7 @@ interface EditTokensDialogProps {
   currentTotalTokens: bigint;
   onClose: () => void;
   onSubmit: (amount: bigint) => void;
+  isSubmitting?: boolean;
 }
 
 export function EditTokensDialog({
@@ -18,6 +19,7 @@ export function EditTokensDialog({
   currentTotalTokens,
   onClose,
   onSubmit,
+  isSubmitting = false,
 }: EditTokensDialogProps) {
   const [newAmount, setNewAmount] = useState("");
 
@@ -46,14 +48,16 @@ export function EditTokensDialog({
               onSubmit(difference);
             }
           }}
-          disabled={!hasChanges}
+          disabled={!hasChanges || isSubmitting}
           className={css({
             backgroundColor: isDecrease ? 'error' : 'primary',
             color: isDecrease ? 'on-error' : 'on-primary',
             width: "stretch",
+            opacity: isSubmitting ? 0.5 : 1,
+            cursor: isSubmitting ? 'not-allowed' : 'pointer',
           })}
         >
-          {isDecrease ? 'Burn Tokens' : 'Mint Tokens'}
+          {isSubmitting ? 'Processing...' : (isDecrease ? 'Burn Tokens' : 'Mint Tokens')}
         </Button>
       }
     >

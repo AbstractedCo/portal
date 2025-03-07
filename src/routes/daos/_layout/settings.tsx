@@ -72,9 +72,93 @@ function DaoParametersPage() {
       builder.readStorage("CoreAssets", "TotalIssuance", [selectedDaoId])
     );
 
-    const [editFormData, setEditFormData] = useState<EditTokenFormData>({
+    const [_editFormData, _setEditFormData] = useState<EditTokenFormData>({
       target: '',
       difference: 0n
+    });
+
+    const [tokenParams, setTokenParams] = useState<{ target: string, difference: bigint } | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [_updateTokensState, updateTokens] = useMutation((tx) => {
+      if (typeof selectedDaoId !== 'number') throw new Error('DAO ID not found');
+      if (!tokenParams) throw new Error('No token parameters provided');
+
+      // Max u128 value
+      const MAX_U128 = 2n ** 128n - 1n;
+
+      // Validate amount is within u128 range
+      if (tokenParams.difference > MAX_U128) {
+        throw new Error('Amount exceeds maximum value');
+      }
+
+      return tx.INV4.operate_multisig({
+        dao_id: selectedDaoId,
+        call: (tokenParams.difference > 0n
+          ? tx.INV4.token_mint({
+            target: tokenParams.target,
+            amount: tokenParams.difference
+          })
+          : tx.INV4.token_burn({
+            target: tokenParams.target,
+            amount: tokenParams.difference < 0n ? -tokenParams.difference : tokenParams.difference
+          })
+        ).decodedCall,
+        fee_asset: { type: "Native", value: undefined },
+        metadata: undefined,
+      });
+    });
+
+    // Effect to trigger mutation when tokenParams changes
+    useEffect(() => {
+      if (tokenParams && !isSubmitting) {
+        updateTokens();
+      }
+    }, [tokenParams, isSubmitting, updateTokens]);
+
+    useMutationEffect((event) => {
+      if (event.value === pending) {
+        setIsSubmitting(true);
+        showNotification({
+          variant: 'success',
+          message: 'Submitting transaction...',
+        });
+        return;
+      }
+
+      if (event.value instanceof MutationError) {
+        setIsSubmitting(false);
+        setTokenParams(null);
+        showNotification({
+          variant: 'error',
+          message: 'Transaction failed: ' + event.value.message,
+        });
+        return;
+      }
+
+      switch (event.value.type) {
+        case 'finalized':
+          setIsSubmitting(false);
+          setTokenParams(null);
+          if (event.value.ok) {
+            showNotification({
+              variant: 'success',
+              message: 'Transaction submitted successfully',
+            });
+            setEditingTokens(null);
+          } else {
+            showNotification({
+              variant: 'error',
+              message: 'Transaction failed: ' + event.value.dispatchError.toString()
+            });
+          }
+          break;
+        default:
+          showNotification({
+            variant: 'success',
+            message: 'Transaction pending...',
+          });
+      }
     });
 
     useEffect(() => {
@@ -115,34 +199,6 @@ function DaoParametersPage() {
             ? formData.frozenTokens
             : undefined,
         }).decodedCall,
-        fee_asset: { type: "Native", value: undefined },
-        metadata: undefined,
-      });
-    });
-
-    const [_updateTokensState, updateTokens] = useMutation((tx) => {
-      if (typeof selectedDaoId !== 'number') throw new Error('DAO ID not found');
-
-      // Max u128 value
-      const MAX_U128 = 2n ** 128n - 1n;
-
-      // Validate amount is within u128 range
-      if (editFormData.difference > MAX_U128) {
-        throw new Error('Amount exceeds maximum value');
-      }
-
-      return tx.INV4.operate_multisig({
-        dao_id: selectedDaoId,
-        call: (editFormData.difference > 0n
-          ? tx.INV4.token_mint({
-            target: editFormData.target,
-            amount: editFormData.difference
-          })
-          : tx.INV4.token_burn({
-            target: editFormData.target,
-            amount: editFormData.difference * -1n // Use multiplication instead of negation
-          })
-        ).decodedCall,
         fee_asset: { type: "Native", value: undefined },
         metadata: undefined,
       });
@@ -526,20 +582,14 @@ function DaoParametersPage() {
                       currentBalance={balances[index]?.free ?? 0n}
                       currentTotalTokens={totalTokens ?? 0n}
                       onClose={() => setEditingTokens(null)}
+                      isSubmitting={isSubmitting}
                       onSubmit={async (difference) => {
+                        if (isSubmitting) return;
                         try {
-                          setEditFormData({
+                          setTokenParams({
                             target: address,
                             difference
                           });
-
-                          await new Promise(resolve => setTimeout(resolve, 0));
-
-                          const tx = await updateTokens();
-
-                          if (tx) {
-                            setEditingTokens(null);
-                          }
                         } catch (error) {
                           showNotification({
                             variant: "error",
