@@ -226,11 +226,11 @@ function Navigation({ className }: NavigationProps) {
             Governance
           </Link>
         </li> */}
-        <li>
+        {/* <li>
           <Link to="/profile" activeProps={activeProps}>
             Profile
           </Link>
-        </li>
+        </li> */}
       </ul>
     </nav>
   );
