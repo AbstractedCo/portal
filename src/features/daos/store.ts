@@ -3,7 +3,7 @@ import { atomWithLocalStorage } from "../jotai/utils";
 import { idle } from "@reactive-dot/core";
 import { useLazyLoadQueryWithRefresh } from "@reactive-dot/react";
 import { useAtomValue, useSetAtom } from "jotai";
-
+import { useQueryRefresh } from "../../hooks/useQueryRefresh";
 export const selectedDaoIdAtom = atomWithLocalStorage<number | undefined>(
   "@invarch-portal/selected-dao",
   undefined,
@@ -12,22 +12,26 @@ export const selectedDaoIdAtom = atomWithLocalStorage<number | undefined>(
 export function useLazyLoadSelectedDaoId() {
   const account = useAtomValue(selectedAccountAtom);
 
-  const accountCoreAssets = useLazyLoadQueryWithRefresh((builder) =>
+  const [accountCoreAssets, refresh] = useLazyLoadQueryWithRefresh((builder) =>
     account === undefined
       ? undefined
       : builder.readStorageEntries("CoreAssets", "Accounts", [account.address]),
   );
 
+  useQueryRefresh(async () => {
+    await refresh();
+  });
+
   const selectedDaoId = useAtomValue(selectedDaoIdAtom);
 
-  if (accountCoreAssets[0] === idle) {
+  if (accountCoreAssets === idle) {
     return undefined;
   }
 
   return (
-    accountCoreAssets[0].find(
+    accountCoreAssets.find(
       ({ keyArgs: [_, daoId] }) => daoId === selectedDaoId,
-    ) ?? accountCoreAssets[0].at(0)
+    ) ?? accountCoreAssets.at(0)
   )?.keyArgs[1];
 }
 

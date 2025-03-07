@@ -13,11 +13,13 @@ import {
   useLazyLoadQuery,
   useNativeTokenAmountFromNumber,
   useNativeTokenAmountFromPlanck,
+  useLazyLoadQueryWithRefresh,
 } from "@reactive-dot/react";
 import request, { gql } from "graphql-request";
 import { useAtomValue } from "jotai";
 import { type ReactNode, Suspense, useMemo } from "react";
 import { use } from "react18-use";
+import { useQueryRefresh } from "../../../hooks/useQueryRefresh";
 
 type StakingStatisticsProps = {
   className?: string;
@@ -258,9 +260,15 @@ function CurrentEra() {
   );
 
   function SuspendableCurrentEra() {
-    return useLazyLoadQuery((builder) =>
-      builder.readStorage("OcifStaking", "CurrentEra", []),
-    ).toLocaleString();
+    const [result, refresh] = useLazyLoadQueryWithRefresh((builder) =>
+      builder.readStorage("OcifStaking", "CurrentEra", [])
+    );
+
+    useQueryRefresh(async () => {
+      await refresh();
+    });
+
+    return result.toLocaleString();
   }
 }
 

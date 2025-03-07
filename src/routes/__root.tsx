@@ -40,6 +40,7 @@ import { Suspense, useEffect, useState } from "react";
 import { CreateDaoDialog } from "../features/daos/components/create-dao-dialog";
 import { useNotification } from "../contexts/notification-context";
 import { ModalDialog } from "../components/modal-dialog";
+import { useQueryRefresh } from "../hooks/useQueryRefresh";
 
 registerDotConnect({ wallets: config.wallets ?? [] });
 
@@ -486,17 +487,9 @@ function SuspendableDaos() {
       ),
     );
 
-    useEffect(() => {
-      window.refreshDaoList = async () => {
-        await Promise.all([
-          refreshDaoIds(),
-          refreshDaos()
-        ]);
-      };
-      return () => {
-        window.refreshDaoList = undefined;
-      };
-    }, [refreshDaoIds, refreshDaos]);
+    useQueryRefresh(async () => {
+      await Promise.all([refreshDaoIds(), refreshDaos()]);
+    });
 
     const daosList = daos
       .map((dao, index) => {
