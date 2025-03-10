@@ -253,11 +253,15 @@ function Member({ daoId, address }: MemberProps) {
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const { showNotification } = useNotification();
+  const [memberBalance, setMemberBalance] = useState<{ free: bigint } | null>(null);
 
   const [removeMemberState, removeMember] = useMutation((tx) =>
     tx.INV4.operate_multisig({
       dao_id: daoId,
-      call: tx.INV4.token_burn({ target: address, amount: 0n }).decodedCall,
+      call: tx.INV4.token_burn({
+        target: address,
+        amount: memberBalance?.free ?? 0n
+      }).decodedCall,
       fee_asset: { type: "Native", value: undefined },
       metadata: undefined,
     }),
@@ -313,7 +317,11 @@ function Member({ daoId, address }: MemberProps) {
         <td>
           <AccountListItem address={address} />
         </td>
-        <AccountVote daoId={daoId} address={address} />
+        <AccountVote
+          daoId={daoId}
+          address={address}
+          onBalanceLoad={setMemberBalance}
+        />
         <td className={css({
           textAlign: "center",
           padding: "1rem",
