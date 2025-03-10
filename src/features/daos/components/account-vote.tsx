@@ -1,12 +1,21 @@
 import { useLazyLoadQuery } from "@reactive-dot/react";
 import { css } from "../../../../styled-system/css";
+import React from "react";
 
-type AccountVoteProps = { daoId: number; address: string };
+type AccountVoteProps = {
+  daoId: number;
+  address: string;
+  onBalanceLoad?: (balance: { free: bigint }) => void;
+};
 
-export function AccountVote({ daoId, address }: AccountVoteProps) {
+export function AccountVote({ daoId, address, onBalanceLoad }: AccountVoteProps) {
   const balance = useLazyLoadQuery((builder) =>
     builder.readStorage("CoreAssets", "Accounts", [address, daoId]),
   );
+
+  React.useEffect(() => {
+    onBalanceLoad?.(balance);
+  }, [balance, onBalanceLoad]);
 
   const totalTokens = useLazyLoadQuery((builder) =>
     builder.readStorage("CoreAssets", "TotalIssuance", [daoId]),
