@@ -35,20 +35,4 @@ export function useSetSelectedDaoId() {
   return useSetAtom(selectedDaoIdAtom);
 }
 
-export function useLazyLoadDaoInfo() {
-  const daoId = useLazyLoadSelectedDaoId();
-
-  const isFallback = daoId === undefined;
-
-  const daoInfo = useLazyLoadQueryWithRefresh((builder) =>
-    builder.readStorage("INV4", "CoreStorage", [daoId ?? 0]),
-  );
-
-  if (isFallback) {
-    return undefined;
-  }
-
-  return daoInfo[0];
-}
-
 

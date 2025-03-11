@@ -13,6 +13,7 @@ import { useNotification } from "../../../contexts/notification-context";
 import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
 import { MutationError, pending } from "@reactive-dot/core";
 import { QRCodeSVG } from "qrcode.react";
+import { BridgeAssetsInDialog } from "../../../components/xcm-in";
 
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
@@ -60,11 +61,16 @@ function AssetsPage() {
         ),
       );
 
-      const tokens = coreTokens.map((token, index) => ({
-        id: token.keyArgs[1],
-        value: token.value,
-        metadata: assetMetadata.at(index)!,
-      }));
+      const tokens = coreTokens
+        .filter(token => token.keyArgs[1] !== 0)
+        .map((token, index) => {
+          return {
+            id: token.keyArgs[1],
+            value: token.value,
+            metadata: assetMetadata.at(index)!,
+          }
+
+        });
 
       tokens.push({
         id: 0,
@@ -80,8 +86,8 @@ function AssetsPage() {
       });
 
       const [transferDialogOpen, setTransferDialogOpen] = useState(false);
-
       const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+      const [bridgeInDialogOpen, setBridgeInDialogOpen] = useState(false);
 
       // First, add this state at the component level where both dialogs are rendered
       const [transferDialogState, setTransferDialogState] = useState<{
@@ -146,8 +152,8 @@ function AssetsPage() {
             </Button>
 
             <Button
-              onClick={() => {/* TODO */ }}
-              disabled={true}
+              onClick={() => setBridgeInDialogOpen(true)}
+              disabled={false}
               className={buttonStyle}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
@@ -227,6 +233,13 @@ function AssetsPage() {
               ))}
             </tbody>
           </table>
+
+          {bridgeInDialogOpen && (
+            <BridgeAssetsInDialog
+              daoId={daoId!}
+              onClose={() => setBridgeInDialogOpen(false)}
+            />
+          )}
 
           {depositDialogOpen && (
             <DepositDialog

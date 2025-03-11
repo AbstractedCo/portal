@@ -47,6 +47,21 @@ export const Route = createRootRouteWithContext<{
   title?: string | undefined;
 }>()({
   component: Root,
+  errorComponent: ({ error }) => (
+    <div className={css({
+      padding: "2rem",
+      color: "error",
+      display: "flex",
+      flexDirection: "column",
+      gap: "1rem",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: "100dvh"
+    })}>
+      <h1>Something went wrong!</h1>
+      <pre>{error instanceof Error ? error.message : String(error)}</pre>
+    </div>
+  )
 });
 
 const sideBarOpenAtom = atom(false);
