@@ -25,6 +25,89 @@ function Layout() {
     return new DenominatedNumber(balance, DECIMALS, "VARCH").toLocaleString();
   };
 
+  // Create asset components to use in both mobile and desktop layouts
+  const PersonalAssetsComponent = () => (
+    <article
+      className={css({
+        backgroundColor: "surfaceContainer",
+        borderRadius: "1rem",
+        padding: "2rem",
+      })}
+    >
+      <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>Personal Assets</header>
+      <dl
+        className={css({
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) max-content",
+          "& dt": {
+            borderBottom: "0.25px solid {colors.outlineVariant}",
+            padding: "1rem 1rem 1rem 0",
+            color: "content.muted",
+          },
+          "& dd": {
+            padding: "1rem 0 1rem 1rem",
+            borderBottom: "1.5px solid {colors.outline}",
+            textAlign: "end",
+          },
+          "& :is(dd, dt):last-of-type": {
+            borderWidth: 0,
+            paddingBottom: 0,
+          },
+        })}
+      >
+        <dt>Available Balance</dt>
+        <dd>{formatDenominated(personalBalance.free)}</dd>
+        {/* <dt>Reserved Balance</dt>
+        <dd>{formatDenominated(personalBalance.reserved)}</dd>
+        <dt>Frozen Balance</dt>
+        <dd>{formatDenominated(personalBalance.frozen)}</dd>
+        <dt>Total Balance</dt>
+        <dd>{formatDenominated(personalBalance.free + personalBalance.reserved)}</dd> */}
+      </dl>
+    </article>
+  );
+
+  const DaoAssetsComponent = () => (
+    <article
+      className={css({
+        backgroundColor: "surfaceContainer",
+        borderRadius: "1rem",
+        padding: "2rem",
+      })}
+    >
+      <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>DAO Assets</header>
+      <dl
+        className={css({
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) max-content",
+          "& dt": {
+            borderBottom: "0.25px solid {colors.outlineVariant}",
+            padding: "1rem 1rem 1rem 0",
+            color: "content.muted",
+          },
+          "& dd": {
+            padding: "1rem 0 1rem 1rem",
+            borderBottom: "1.5px solid {colors.outline}",
+            textAlign: "end",
+          },
+          "& :is(dd, dt):last-of-type": {
+            borderWidth: 0,
+            paddingBottom: 0,
+          },
+        })}
+      >
+        <dt>Free Native Balance</dt>
+        <dd>{formatDenominated(daoBalance.free)}</dd>
+        {/* <dt>Reserved Native Balance</dt>
+        <dd>{formatDenominated(daoBalance.reserved)}</dd>
+        <dt>Frozen Native Balance</dt>
+        <dd>{formatDenominated(daoBalance.frozen)}</dd>
+        <dt>Total Native Balance</dt>
+        <dd>{formatDenominated(daoBalance.free + daoBalance.reserved)}</dd> */}
+      </dl>
+    </article>
+  );
+
   return (
     <div
       className={css({
@@ -36,12 +119,13 @@ function Layout() {
         },
       })}
     >
+      {/* Sidebar for Desktop only */}
       <div
         className={css({
-          display: "contents",
+          display: "none", // Hide on mobile
           "@media(min-width: 64rem)": {
-            flex: "0 0 20rem",
             display: "flex",
+            flex: "0 0 20rem",
             flexDirection: "column",
             gap: "1rem",
             position: "sticky",
@@ -50,100 +134,48 @@ function Layout() {
           },
         })}
       >
-        <article
-          className={css({
-            backgroundColor: "surfaceContainer",
-            borderRadius: "1rem",
-            padding: "2rem",
-          })}
-        >
-          <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>Personal Assets</header>
-          <dl
-            className={css({
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 1fr) max-content",
-              "& dt": {
-                borderBottom: "0.25px solid {colors.outlineVariant}",
-                padding: "1rem 1rem 1rem 0",
-                color: "content.muted",
-              },
-              "& dd": {
-                padding: "1rem 0 1rem 1rem",
-                borderBottom: "1.5px solid {colors.outline}",
-                textAlign: "end",
-              },
-              "& :is(dd, dt):last-of-type": {
-                borderWidth: 0,
-                paddingBottom: 0,
-              },
-            })}
-          >
-            <dt>Available Balance</dt>
-            <dd>{formatDenominated(personalBalance.free)}</dd>
-            {/* <dt>Reserved Balance</dt>
-            <dd>{formatDenominated(personalBalance.reserved)}</dd>
-            <dt>Frozen Balance</dt>
-            <dd>{formatDenominated(personalBalance.frozen)}</dd>
-            <dt>Total Balance</dt>
-            <dd>{formatDenominated(personalBalance.free + personalBalance.reserved)}</dd> */}
-          </dl>
-        </article>
-
-        <article
-          className={css({
-            backgroundColor: "surfaceContainer",
-            borderRadius: "1rem",
-            padding: "2rem",
-          })}
-        >
-          <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>DAO Assets</header>
-          <dl
-            className={css({
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 1fr) max-content",
-              "& dt": {
-                borderBottom: "0.25px solid {colors.outlineVariant}",
-                padding: "1rem 1rem 1rem 0",
-                color: "content.muted",
-              },
-              "& dd": {
-                padding: "1rem 0 1rem 1rem",
-                borderBottom: "1.5px solid {colors.outline}",
-                textAlign: "end",
-              },
-              "& :is(dd, dt):last-of-type": {
-                borderWidth: 0,
-                paddingBottom: 0,
-              },
-            })}
-          >
-            <dt>Free Native Balance</dt>
-            <dd>{formatDenominated(daoBalance.free)}</dd>
-            {/* <dt>Reserved Native Balance</dt>
-            <dd>{formatDenominated(daoBalance.reserved)}</dd>
-            <dt>Frozen Native Balance</dt>
-            <dd>{formatDenominated(daoBalance.frozen)}</dd>
-            <dt>Total Native Balance</dt>
-            <dd>{formatDenominated(daoBalance.free + daoBalance.reserved)}</dd> */}
-          </dl>
-        </article>
+        <PersonalAssetsComponent />
+        <DaoAssetsComponent />
       </div>
+
+      {/* Main content */}
       <div
         className={css({
-          display: "contents",
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
           "@media(min-width: 64rem)": {
             flex: 1,
-            display: "revert",
+            maxWidth: "calc(100% - 21rem)",
+            overflow: "hidden",
           },
         })}
       >
         <Tabs
           value={location.pathname}
           className={css({
-            fontSize: "0.65rem",
+            fontSize: "0.85rem",
+            width: "100%",
+            paddingBottom: "1rem",
+            marginBottom: "0.5rem",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            "& [data-part='trigger']": {
+              padding: "1rem 0.5rem",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              minHeight: "3rem",
+              fontWeight: "500",
+            },
+            "& [data-part='list']": {
+              height: "auto",
+              minHeight: "3rem",
+            },
             "@media(min-width: 64rem)": {
               fontSize: "revert",
               marginBottom: "2.75rem",
+              paddingBottom: 0,
+              borderBottom: "none",
             },
           })}
         >
@@ -164,6 +196,22 @@ function Layout() {
           </Link>
         </Tabs>
         <Outlet />
+
+        {/* Assets shown below content on mobile only */}
+        <div
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+            marginTop: "2rem",
+            "@media(min-width: 64rem)": {
+              display: "none", // Hide on desktop
+            },
+          })}
+        >
+          <PersonalAssetsComponent />
+          <DaoAssetsComponent />
+        </div>
       </div>
     </div>
   );

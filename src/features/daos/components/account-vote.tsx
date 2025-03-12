@@ -28,14 +28,16 @@ export function AccountVote({ daoId, address, onBalanceLoad }: AccountVoteProps)
       <td className={css({
         textAlign: "right",
         padding: "1rem",
-        paddingRight: "2rem"
+        width: "120px",
+        maxWidth: "120px",
       })}>
         {balance.free.toLocaleString()}
       </td>
       <td className={css({
         textAlign: "right",
         padding: "1rem",
-        paddingRight: "2rem"
+        width: "80px",
+        maxWidth: "80px",
       })}>
         {percentage.toFixed(2)}%
       </td>

@@ -47,6 +47,7 @@ function SuspendableTransactionPage({
         borderRadius: "1rem",
         backgroundColor: "container",
         padding: "2rem",
+        overflow: "hidden",
       })}
     >
       <Accordion>
@@ -64,7 +65,14 @@ function SuspendableTransactionPage({
                 value={index.toString()}
                 summary={
                   <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
-                    <SuspendableSummary />
+                    <div className={css({
+                      maxWidth: "100%",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    })}>
+                      <SuspendableSummary />
+                    </div>
                   </Suspense>
                 }
               >

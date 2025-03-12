@@ -4,30 +4,64 @@ import { idle } from "@reactive-dot/core";
 import { useLazyLoadQuery } from "@reactive-dot/react";
 import { PolkadotIdenticon } from "dot-identicon/react.js";
 import { Suspense } from "react";
+import { css } from "../../styled-system/css";
 
 export type AccountListItemProps = {
   address: string;
-  name?: string | undefined;
+  name?: string;
 };
 
 export function AccountListItem({ address, name }: AccountListItemProps) {
   const shortenedAddress = address.slice(0, 4) + "..." + address.slice(-4);
 
   return (
-    <ListItem
-      headline={
-        <Suspense fallback={name ?? shortenedAddress}>
-          <OnChainName />
-        </Suspense>
-      }
-      supporting={shortenedAddress}
-      leading={
-        <PolkadotIdenticon
-          address={address}
-          backgroundColor="var(--colors-content)"
-        />
-      }
-    />
+    <div className={css({
+      maxWidth: "100%",
+      overflow: "hidden"
+    })}>
+      <ListItem
+        headline={
+          <Suspense fallback={
+            <span className={css({
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              display: "block",
+              maxWidth: "100%"
+            })}>
+              {name ?? shortenedAddress}
+            </span>
+          }>
+            <span className={css({
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              display: "block",
+              maxWidth: "100%"
+            })}>
+              <OnChainName />
+            </span>
+          </Suspense>
+        }
+        supporting={
+          <span className={css({
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            display: "block",
+            maxWidth: "100%"
+          })}>
+            {shortenedAddress}
+          </span>
+        }
+        leading={
+          <PolkadotIdenticon
+            address={address}
+            backgroundColor="var(--colors-content)"
+          />
+        }
+      />
+    </div>
   );
 
   function OnChainName() {
@@ -69,9 +103,9 @@ export function AccountListItem({ address, name }: AccountListItemProps) {
     const identityDisplay =
       getDisplay(identity?.[0]?.info.display) ??
       (superIdentity === idle ||
-      superIdentity === undefined ||
-      superAccountIdentity === idle ||
-      superAccountIdentity === undefined
+        superIdentity === undefined ||
+        superAccountIdentity === idle ||
+        superAccountIdentity === undefined
         ? undefined
         : `${getDisplay(superAccountIdentity[0].info.display)}/${getDisplay(superIdentity[1])}`);
 

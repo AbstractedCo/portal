@@ -40,77 +40,105 @@ function MembersPage() {
         display: "flex",
         flexDirection: "column",
         gap: "1rem",
+        width: "100%",
+        maxWidth: "100%",
+        overflow: "hidden",
       })}>
-        <table className={css({ width: "stretch", borderCollapse: "collapse" })}>
-          <thead>
-            <tr>
-              <th className={css({
-                textAlign: "left",
-                padding: "1rem",
-                width: "50%"
-              })}>User</th>
-              <th className={css({
-                textAlign: "right",
-                padding: "1rem",
-                width: "25%"
-              })}>Voting Tokens</th>
-              <th className={css({
-                textAlign: "right",
-                padding: "1rem",
-                width: "25%"
-              })}>Vote Strength (%)</th>
-              <th className={css({
-                textAlign: "center",
-                padding: "1rem",
-                width: "100px"
-              })}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {memberAddresses.map((address) => (
-              <Member key={address} daoId={daoId!} address={address} />
-            ))}
-          </tbody>
-        </table>
-
-        <Button
-          onClick={() => setAddMemberDialogOpen(true)}
-          className={css({
-            alignSelf: "flex-end",
-            position: "relative",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgb(241, 143, 123)",
-            color: "black",
-            padding: "1rem 1rem",
-            borderRadius: "0.75rem",
-            fontSize: "1rem",
-            fontWeight: "500",
-            border: "none",
-            cursor: "pointer",
-            minWidth: "160px",
-            "&:hover": {
-              backgroundColor: "rgb(241, 143, 123, 0.8)",
+        <div className={css({
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          width: '100%',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          marginBottom: '0.5rem'
+        })}>
+          <h2 className={css({
+            fontSize: '1.5rem',
+            fontWeight: 'bold',
+            maxWidth: 'calc(100% - 150px)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            '@media (max-width: 600px)': {
+              maxWidth: '100%',
+              fontSize: '1.2rem',
             }
-          })}
-        >
-          <div style={{
-            position: "relative",
-            display: "flex",
-            alignItems: "center"
-          }}>
-            <UserPlusIcon size={20} />
-            <span style={{
-              display: "block",
-              lineHeight: "0px",
-              paddingLeft: "7px",
-              marginTop: "0px"
+          })}>
+            DAO Members
+          </h2>
+          <Button
+            onClick={() => setAddMemberDialogOpen(true)}
+            className={css({
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgb(241, 143, 123)",
+              color: "black",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "0.75rem",
+              fontSize: "0.875rem",
+              fontWeight: "500",
+              border: "none",
+              cursor: "pointer",
+              "@media (min-width: 600px)": {
+                padding: "1rem",
+                fontSize: "1rem",
+              },
+              "&:hover": {
+                backgroundColor: "rgb(241, 143, 123, 0.8)",
+              }
+            })}
+          >
+            <div style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.2rem"
             }}>
-              Add Member
-            </span>
-          </div>
-        </Button>
+              <UserPlusIcon size={18} />
+              <span>Add Member</span>
+            </div>
+          </Button>
+        </div>
+
+        <div className={css({
+          overflowX: 'auto',
+          width: '100%',
+        })}>
+          <table className={css({
+            width: "100%",
+            borderCollapse: "collapse"
+          })}>
+            <thead>
+              <tr>
+                <th className={css({
+                  textAlign: "left",
+                  padding: "1rem",
+                })}>User</th>
+                <th className={css({
+                  textAlign: "right",
+                  padding: "1rem",
+                })}>Voting Tokens</th>
+                <th className={css({
+                  textAlign: "right",
+                  padding: "1rem",
+                })}>Vote Strength (%)</th>
+                <th className={css({
+                  textAlign: "center",
+                  padding: "1rem",
+                  width: "60px"
+                })}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {memberAddresses.map((address) => (
+                <Member key={address} daoId={daoId!} address={address} />
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {addMemberDialogOpen && (
           <AddMemberDialog
@@ -314,7 +342,12 @@ function Member({ daoId, address }: MemberProps) {
   return (
     <>
       <tr>
-        <td>
+        <td className={css({
+          maxWidth: "200px",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis"
+        })}>
           <AccountListItem address={address} />
         </td>
         <AccountVote
@@ -325,7 +358,7 @@ function Member({ daoId, address }: MemberProps) {
         <td className={css({
           textAlign: "center",
           padding: "1rem",
-          width: "100px"
+          width: "60px"
         })}>
           {removeMemberState === pending ? (
             <CircularProgressIndicator />

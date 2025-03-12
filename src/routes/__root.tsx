@@ -307,11 +307,24 @@ function TopBar({ className }: TopBarProps) {
           justifyContent: "space-between",
           alignItems: "center",
           gap: "1rem",
+          "@media(max-width: 48rem)": {
+            justifyContent: "center",
+          },
         }),
         className,
       )}
     >
-      <h1 className={css({ textStyle: "bodyLarge", fontWeight: "bold" })}>
+      <h1 className={css({
+        textStyle: "bodyLarge",
+        fontWeight: "bold",
+        maxWidth: "calc(100% - 160px)", // Account for the account selector and connection button
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        "@media(max-width: 48rem)": {
+          display: "none", // Hide title completely on mobile
+        }
+      })}>
         {title}
       </h1>
       <div
@@ -321,6 +334,10 @@ function TopBar({ className }: TopBarProps) {
           display: "flex",
           alignItems: "center",
           gap: "0.5rem",
+          flexShrink: 0,
+          "@media(max-width: 48rem)": {
+            margin: "0 auto",
+          }
         })}
       >
         <AccountSelect />
@@ -580,6 +597,11 @@ function SuspendableDaos() {
               gap: "0.5rem",
               backgroundColor:
                 dao.id === selectedDaoId ? "surfaceContainer" : undefined,
+              maxWidth: "100%",
+              overflow: "hidden",
+              "@media(width < 48rem)": {
+                outline: dao.id === selectedDaoId ? "2px solid {colors.primary}" : undefined,
+              }
             })}
           >
             <button
@@ -588,6 +610,8 @@ function SuspendableDaos() {
                 flex: 1,
                 cursor: "pointer",
                 textAlign: "start",
+                maxWidth: "calc(100% - 35px)", // Account for the copy button
+                overflow: "hidden"
               })}
             >
               <AccountListItem
@@ -609,6 +633,7 @@ function SuspendableDaos() {
                 padding: "0.5rem",
                 borderRadius: "0.5rem",
                 color: "content.muted",
+                flexShrink: 0,
                 "&:hover": {
                   color: "content.default",
                   backgroundColor: "surface.hover",

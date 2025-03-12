@@ -295,17 +295,59 @@ function DaoParametersPage() {
         display: 'flex',
         flexDirection: 'column',
         gap: '1.5rem',
+        width: '100%',
+        maxWidth: '100%',
+        overflow: 'hidden',
       })}>
         <div className={css({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          width: '100%',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
         })}>
-          <h2 className={css({ fontSize: '1.5rem', fontWeight: 'bold' })}>
-            {daoInfo.metadata.asText()} Parameters
-          </h2>
+          <div className={css({
+            maxWidth: 'calc(100% - 130px)',
+            overflow: 'auto',
+            scrollbarWidth: 'none',
+            '&::-webkit-scrollbar': {
+              display: 'none',
+            },
+            '--ms-overflow-style': 'none',
+            '@media (max-width: 600px)': {
+              maxWidth: isEditing ? '100%' : 'calc(100% - 110px)',
+            },
+          })}>
+            <h2 className={css({
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap',
+              '@media (max-width: 600px)': {
+                fontSize: '1.2rem',
+              }
+            })}>
+              {daoInfo.metadata.asText()} Parameters
+            </h2>
+          </div>
           {!isEditing && (
-            <Button onClick={() => setIsEditing(true)}>Edit Parameters</Button>
+            <Button
+              onClick={() => setIsEditing(true)}
+              className={css({
+                flexShrink: 0,
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.875rem',
+                height: 'auto',
+                minHeight: '2.25rem',
+                whiteSpace: 'nowrap',
+                '@media (max-width: 600px)': {
+                  padding: '0.4rem 0.6rem',
+                  fontSize: '0.8rem',
+                }
+              })}
+            >
+              Edit Parameters
+            </Button>
           )}
         </div>
 
@@ -522,6 +564,7 @@ function DaoParametersPage() {
         <div className={css({
           backgroundColor: 'surfaceContainer',
           borderRadius: '0.5rem',
+          overflowX: 'hidden',
         })}>
           <h3 className={css({
             fontSize: '1.25rem',
@@ -531,98 +574,100 @@ function DaoParametersPage() {
           })}>
             Token Distribution
           </h3>
-          <table className={css({
-            width: 'stretch',
-            borderCollapse: 'collapse',
+          <div className={css({
+            overflowX: 'auto',
+            width: '100%',
           })}>
-            <thead>
-              <tr className={css({
-                textAlign: 'left',
-                color: 'content.muted',
-                fontSize: '0.875rem',
-              })}>
-                <th className={css({
-                  textAlign: "left",
-                  padding: "1rem",
-                  width: "50%",
-                })}>Account</th>
-                <th className={css({
-                  textAlign: "right",
-                  padding: "1rem",
-                  width: "25%",
-                })}>Voting Tokens</th>
-                <th className={css({
-                  textAlign: "right",
-                  padding: "1rem",
-                  width: "25%",
-                })}>Vote Strength (%)</th>
-                <th className={css({
-                  textAlign: "center",
-                  padding: "1rem",
-                  width: "100px",
-                })}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {memberAddresses.map((address, index) => (
-                <tr
-                  key={address}
-                  className={css({
-                    '&:hover': {
-                      backgroundColor: 'surfaceHover',
-                    }
-                  })}
-                >
-                  <td>
-                    <AccountListItem address={address} />
-                  </td>
-                  {editingTokens === address ? (
-                    <EditTokensDialog
-                      address={address}
-                      currentBalance={balances[index]?.free ?? 0n}
-                      currentTotalTokens={totalTokens ?? 0n}
-                      onClose={() => setEditingTokens(null)}
-                      isSubmitting={isSubmitting}
-                      onSubmit={async (difference) => {
-                        if (isSubmitting) return;
-                        try {
-                          setTokenParams({
-                            target: address,
-                            difference
-                          });
-                        } catch (error) {
-                          showNotification({
-                            variant: "error",
-                            message: error instanceof Error ? error.message : 'Transaction failed',
-                          });
-                        }
-                      }}
-                    />
-                  ) : (
-                    <>
-                      <AccountVote daoId={selectedDaoId} address={address} />
-                      <td className={css({
-                        textAlign: "center",
-                        padding: "1rem",
-                        width: "100px"
-                      })}>
-                        <button
-                          className={css({
-                            color: "content.muted",
-                            cursor: "pointer",
-                            "&:hover": { color: "content.primary" },
-                          })}
-                          onClick={() => setEditingTokens(address)}
-                        >
-                          <Edit2Icon size={18} />
-                        </button>
-                      </td>
-                    </>
-                  )}
+            <table className={css({
+              width: '100%',
+              borderCollapse: 'collapse',
+            })}>
+              <thead>
+                <tr className={css({
+                  textAlign: 'left',
+                  color: 'content.muted',
+                  fontSize: '0.875rem',
+                })}>
+                  <th className={css({
+                    textAlign: "left",
+                    padding: "1rem",
+                  })}>Account</th>
+                  <th className={css({
+                    textAlign: "right",
+                    padding: "1rem",
+                  })}>Voting Tokens</th>
+                  <th className={css({
+                    textAlign: "right",
+                    padding: "1rem",
+                  })}>Vote Strength (%)</th>
+                  <th className={css({
+                    textAlign: "center",
+                    padding: "1rem",
+                    width: "60px",
+                  })}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {memberAddresses.map((address, index) => (
+                  <tr
+                    key={address}
+                    className={css({
+                      '&:hover': {
+                        backgroundColor: 'surfaceHover',
+                      }
+                    })}
+                  >
+                    <td>
+                      <AccountListItem address={address} />
+                    </td>
+                    {editingTokens === address ? (
+                      <EditTokensDialog
+                        address={address}
+                        currentBalance={balances[index]?.free ?? 0n}
+                        currentTotalTokens={totalTokens ?? 0n}
+                        onClose={() => setEditingTokens(null)}
+                        isSubmitting={isSubmitting}
+                        onSubmit={async (difference) => {
+                          if (isSubmitting) return;
+                          try {
+                            setTokenParams({
+                              target: address,
+                              difference
+                            });
+                          } catch (error) {
+                            showNotification({
+                              variant: "error",
+                              message: error instanceof Error ? error.message : 'Transaction failed',
+                            });
+                          }
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <AccountVote daoId={selectedDaoId} address={address} />
+                        <td className={css({
+                          textAlign: "center",
+                          padding: "1rem",
+                          width: "100px"
+                        })}>
+                          <button
+                            className={css({
+                              color: "content.muted",
+                              cursor: "pointer",
+                              "&:hover": { color: "content.primary" },
+                            })}
+                            onClick={() => setEditingTokens(address)}
+                          >
+                            <Edit2Icon size={18} />
+                          </button>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     )
