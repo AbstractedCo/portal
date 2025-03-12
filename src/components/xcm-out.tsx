@@ -310,45 +310,66 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
             <div className={css({
               display: "grid",
               gap: "0.5rem",
-              maxHeight: "300px",
+              maxHeight: "min(400px, 50vh)",
               overflowY: "auto",
-              padding: "0.5rem",
+              padding: "1rem",
               backgroundColor: "surfaceContainer",
-              borderRadius: "md",
-              border: "1px solid token(colors.surfaceContainerHighest)"
+              borderRadius: "xl",
+              border: "1px solid token(colors.surfaceContainerHighest)",
+              "@media (max-width: 768px)": {
+                maxHeight: "min(300px, 40vh)",
+                padding: "0.75rem"
+              }
             })}>
-              {availableAssets.map((asset) => (
-                <button
-                  key={asset.id}
-                  onClick={() => setSelectedAsset(asset)}
-                  className={css({
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "0.75rem 1rem",
-                    backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHigh",
-                    color: selectedAsset?.id === asset.id ? "onPrimary" : "content",
-                    border: "none",
-                    borderRadius: "md",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    "&:hover": {
-                      backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHighest",
-                    }
-                  })}
-                >
-                  <span className={css({ fontWeight: "500" })}>{asset.metadata.symbol}</span>
-                  <span className={css({
-                    fontSize: "0.875rem",
-                    color: selectedAsset?.id === asset.id ? "onPrimary" : "content.muted"
-                  })}>
-                    {new DenominatedNumber(
-                      asset.value.free,
-                      asset.metadata.decimals
-                    ).toLocaleString()}
-                  </span>
-                </button>
-              ))}
+              <div>
+                <h4 className={css({
+                  fontSize: "0.9rem",
+                  fontWeight: "500",
+                  color: "content.muted",
+                  marginBottom: "0.75rem",
+                  paddingLeft: "0.5rem"
+                })}>
+                  Available Assets
+                </h4>
+                <div className={css({
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem"
+                })}>
+                  {availableAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      onClick={() => setSelectedAsset(asset)}
+                      className={css({
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "0.75rem 1rem",
+                        backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHigh",
+                        color: selectedAsset?.id === asset.id ? "onPrimary" : "content",
+                        border: "none",
+                        borderRadius: "lg",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        "&:hover": {
+                          backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHighest",
+                        }
+                      })}
+                    >
+                      <span className={css({ fontWeight: "500" })}>{asset.metadata.symbol}</span>
+                      <span className={css({
+                        fontSize: "0.875rem",
+                        color: selectedAsset?.id === asset.id ? "onPrimary" : "content.muted"
+                      })}>
+                        {new DenominatedNumber(
+                          asset.value.free,
+                          asset.metadata.decimals
+                        ).toLocaleString()}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             {availableAssets.length === 0 && (
               <p className={css({
@@ -483,11 +504,26 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
               display: "inline-flex",
               alignItems: "center",
               gap: "0.5rem",
-              width: "auto"
+              width: "auto",
+              "@media (max-width: 768px)": {
+                fontSize: "0.875rem",
+                padding: "0.5rem 0.75rem"
+              }
             })}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-              <span>Bridge Out Assets</span>
+              <span>
+                <span className={css({
+                  "@media (max-width: 768px)": {
+                    display: "none"
+                  }
+                })}>Bridge Out Assets</span>
+                <span className={css({
+                  "@media (min-width: 769px)": {
+                    display: "none"
+                  }
+                })}>Bridge</span>
+              </span>
               <CheckCircleIcon size={16} />
             </div>
           </Button>
