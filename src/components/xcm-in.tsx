@@ -11,13 +11,13 @@ import { selectedAccountAtom } from "../features/accounts/store";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import { DenominatedNumber } from "@reactive-dot/utils";
-import { getAssetHubId } from "../utils/xcm-utils";
+import { getAssetHubId } from "../features/xcm/xcm-utils";
 import {
   useAssetHubBridgeOperation,
   type BridgeStatusChange,
   isBridgeSupported,
   isNativeToken
-} from "../utils/bridge-utils";
+} from "../features/xcm/bridge-utils";
 
 interface BridgeAssetsInDialogProps {
   daoId: number;
