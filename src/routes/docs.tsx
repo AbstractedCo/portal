@@ -8,7 +8,7 @@ export const Route = createFileRoute("/docs")({
 
 function DocsPage() {
   useEffect(() => {
-    window.location.href = "https://docs.invarch.network";
+    window.location.href = "https://docs.invarch.network/creating-daos";
   }, []);
 
   return null;

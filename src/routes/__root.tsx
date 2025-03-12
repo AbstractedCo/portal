@@ -244,7 +244,7 @@ function Navigation({ className }: NavigationProps) {
         </li>
         <li>
           <a
-            href="https://docs.invarch.network"
+            href="https://docs.invarch.network/creating-daos"
             target="_blank"
             rel="noopener noreferrer"
             className={css({
