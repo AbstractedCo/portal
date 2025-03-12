@@ -6,13 +6,18 @@ import { useNotification } from "../contexts/notification-context";
 import { css } from "../../styled-system/css";
 import { useLazyLoadRegisteredAssets } from "../features/assets/store";
 import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
-import { useLazyLoadQuery, useMutation, useMutationEffect } from "@reactive-dot/react";
+import { useLazyLoadQuery } from "@reactive-dot/react";
 import { selectedAccountAtom } from "../features/accounts/store";
 import { useAtomValue } from "jotai";
-import { MutationError, pending } from "@reactive-dot/core";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
-import { FixedSizeBinary } from "polkadot-api";
 import { DenominatedNumber } from "@reactive-dot/utils";
+import { getAssetHubId } from "../utils/xcm-utils";
+import {
+  useAssetHubBridgeOperation,
+  type BridgeStatusChange,
+  isBridgeSupported,
+  isNativeToken
+} from "../utils/bridge-utils";
 
 interface BridgeAssetsInDialogProps {
   daoId: number;
@@ -39,44 +44,267 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
   const registeredAssets = useLazyLoadRegisteredAssets();
   const selectedAccount = useAtomValue(selectedAccountAtom);
 
-  // Extract Asset Hub asset ID from location metadata
-  const getAssetHubId = (location: XcmVersionedLocation | undefined): number | undefined => {
-    if (!location) return undefined;
+  // Get the asset ID for the selected asset
+  const getAssetId = () => {
+    if (!selectedAsset) return undefined;
 
-    // We're looking for the GeneralIndex in the interior
-    const interior = location.value.interior;
-    if (interior.type === "X3") {
-      // Find the GeneralIndex value
-      const generalIndex = interior.value.find(x => x.type === "GeneralIndex");
-      if (generalIndex && generalIndex.type === "GeneralIndex") {
-        return Number(generalIndex.value);
+    console.log("Getting asset ID for:", selectedAsset);
+
+    // For native tokens like DOT, use the asset ID directly
+    if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
+      // Ensure the ID is a valid number before converting to BigInt
+      if (typeof selectedAsset.id === 'number' && !isNaN(selectedAsset.id)) {
+        console.log("Converting native token ID to BigInt:", selectedAsset.id);
+        return BigInt(selectedAsset.id);
       }
+      console.log("Invalid native token ID:", selectedAsset.id);
+      return undefined;
     }
+
+    // For other assets, get the ID from the location
+    if (selectedAsset.metadata.location) {
+      const assetHubId = getAssetHubId(selectedAsset.metadata.location);
+      console.log("Asset Hub ID from location:", assetHubId);
+      return assetHubId;
+    }
+
+    console.log("No valid location found for asset ID");
     return undefined;
+  };
+
+  // Convert amount to proper decimals
+  const getRawAmount = () => {
+    if (!amount || !selectedAsset) {
+      console.log("Missing amount or asset for conversion:", { amount, asset: selectedAsset?.id });
+      return undefined;
+    }
+
+    // Parse the amount to a float, ensuring it's a valid number
+    const parsedAmount = parseFloat(amount);
+    console.log("Parsed amount:", parsedAmount);
+
+    if (isNaN(parsedAmount)) {
+      console.log("Amount is not a valid number:", amount);
+      return undefined;
+    }
+
+    try {
+      // Use Math.round instead of Math.floor to avoid potential precision issues
+      const decimals = selectedAsset.metadata.decimals;
+      console.log("Using decimals:", decimals);
+
+      const scaled = parsedAmount * Math.pow(10, decimals);
+      console.log("Scaled amount:", scaled);
+
+      const rounded = Math.round(scaled);
+      console.log("Rounded amount:", rounded);
+
+      // Ensure it's a valid number before converting to BigInt
+      if (isNaN(rounded) || !isFinite(rounded)) {
+        console.log("Invalid rounded amount:", rounded);
+        return undefined;
+      }
+
+      console.log("Converting to BigInt:", rounded);
+      return BigInt(rounded);
+    } catch (error) {
+      console.error("Error converting amount to BigInt:", error);
+      return undefined;
+    }
   };
 
   // Query user's balance on Asset Hub for the selected asset
   const assetHubBalance = useLazyLoadQuery(
     (builder) => {
-      if (!selectedAsset?.metadata.location || !selectedAccount?.address) return undefined;
+      if (!selectedAsset || !selectedAccount?.address) return undefined;
 
-      const assetHubId = getAssetHubId(selectedAsset.metadata.location);
-      if (assetHubId === undefined) return undefined;
+      // For native tokens like DOT
+      if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
+        // Use the special query for native token balance
+        return builder.readStorage("System", "Account", [selectedAccount.address]);
+      }
 
-      return builder.readStorage("Assets", "Account", [assetHubId, selectedAccount.address]);
+      // For other assets from Asset Hub
+      if (selectedAsset.metadata.location) {
+        const assetHubId = getAssetHubId(selectedAsset.metadata.location);
+        if (assetHubId === undefined) return undefined;
+
+        return builder.readStorage("Assets", "Account", [Number(assetHubId), selectedAccount.address]);
+      }
+
+      return undefined;
     },
     { chainId: "polkadot_asset_hub" }
   );
-
-  // Log for debugging
-  console.log('Selected Asset Location:', selectedAsset?.metadata.location);
-  console.log('Asset Hub ID:', selectedAsset && getAssetHubId(selectedAsset.metadata.location));
-  console.log('Asset Hub Balance:', assetHubBalance);
 
   // Get the DAO's core storage to access its account
   const coreStorage = useLazyLoadQuery((builder) =>
     builder.readStorage("INV4", "CoreStorage", [daoId]),
   );
+
+  // Function to handle status changes from the bridge
+  const handleBridgeStatusChange = (status: BridgeStatusChange) => {
+    // Update processing state
+    setIsProcessing(status.status === 'pending');
+
+    // Display appropriate notification
+    showNotification({
+      variant: status.status === 'error' ? 'error' : 'success',
+      message: status.message
+    });
+
+    // Close dialog on successful completion
+    if (status.status === 'success' && status.message.includes('successful')) {
+      onClose();
+    }
+  };
+
+  // Only provide bridge parameters when they're all valid
+  const getBridgeParams = () => {
+    const assetId = getAssetId();
+    const rawAmount = getRawAmount();
+    const beneficiaryAccount = coreStorage?.account;
+
+    // Add debugging information
+    console.log("Asset ID:", assetId);
+    console.log("Raw amount:", rawAmount);
+    console.log("Selected asset:", selectedAsset);
+
+    if (!rawAmount || !beneficiaryAccount || !selectedAsset) {
+      console.log("Missing required parameters", { rawAmount, beneficiaryAccount, selectedAsset });
+      return undefined;
+    }
+
+    // If we have a native token, assetId might be optional in some cases
+    // Otherwise, ensure we have a valid assetId
+    if (!isNativeToken(selectedAsset.metadata.location) && assetId === undefined) {
+      console.log("Asset ID is required for non-native tokens but is undefined");
+      return undefined;
+    }
+
+    // For non-native tokens, we must have verified there's a valid assetId above
+    // This ensures assetId is always a bigint for non-native tokens
+    // For native tokens, default to 0n if needed
+    const finalAssetId = assetId !== undefined ? assetId : 0n;
+
+    return {
+      beneficiaryAccount,
+      assetLocation: selectedAsset.metadata.location,
+      assetId: finalAssetId,
+      amount: rawAmount,
+      onStatusChange: handleBridgeStatusChange,
+      onComplete: () => {
+        setIsProcessing(false);
+        showNotification({
+          variant: "success",
+          message: `Bridge of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`
+        });
+        onClose();
+      }
+    };
+  };
+
+  // Set up the Asset Hub bridge with the current parameters
+  const assetHubBridge = useAssetHubBridgeOperation(getBridgeParams());
+
+  // Handle bridge operation
+  const handleBridgeIn = async () => {
+    if (!selectedAsset || !coreStorage || !amount || !selectedAccount) {
+      showNotification({
+        variant: "error",
+        message: "Please select an asset, enter an amount, and connect a wallet.",
+      });
+      return;
+    }
+
+    // Validate amount format
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      showNotification({
+        variant: "error",
+        message: "Please enter a valid amount greater than zero."
+      });
+      return;
+    }
+
+    // For assets that need an ID, validate it
+    if (!isNativeToken(selectedAsset.metadata.location)) {
+      const assetId = getAssetId();
+      if (assetId === undefined) {
+        showNotification({
+          variant: "error",
+          message: "Selected asset does not have a valid ID for transfer"
+        });
+        return;
+      }
+    }
+
+    // Get raw amount and validate it
+    const rawAmount = getRawAmount();
+    if (rawAmount === undefined) {
+      showNotification({
+        variant: "error",
+        message: "Could not convert amount to the correct format. Please check your input."
+      });
+      return;
+    }
+
+    try {
+      console.log("Starting bridge execution with params:", getBridgeParams());
+      // Execute the bridge operation
+      await assetHubBridge.executeBridge();
+    } catch (error) {
+      console.error("Failed to submit bridge transaction:", error);
+      showNotification({
+        variant: "error",
+        message: "Failed to submit bridge transaction: " + (error instanceof Error ? error.message : "Unknown error"),
+      });
+      setIsProcessing(false);
+    }
+  };
+
+  // Filter assets to only show those with supported bridges
+  const getFilteredAssets = () => {
+    return registeredAssets
+      .filter(asset => {
+        if (!asset.metadata.location) return false;
+        // Check if we have a bridge implementation for this asset location
+        return isBridgeSupported(asset.metadata.location);
+      });
+  };
+
+  // Get formatted balance for display
+  const getFormattedBalance = () => {
+    if (!selectedAsset || !assetHubBalance) return "Loading...";
+
+    // For native tokens (like DOT)
+    if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
+      if (typeof assetHubBalance === 'object' && 'data' in assetHubBalance) {
+        const freeBalance = assetHubBalance.data?.free || 0n;
+        return new DenominatedNumber(
+          freeBalance,
+          selectedAsset.metadata.decimals
+        ).toLocaleString() + " " + selectedAsset.metadata.symbol;
+      }
+    }
+
+    // For other assets
+    if (typeof assetHubBalance === 'object' && 'balance' in assetHubBalance) {
+      return new DenominatedNumber(
+        assetHubBalance.balance ?? 0n,
+        selectedAsset.metadata.decimals
+      ).toLocaleString() + " " + selectedAsset.metadata.symbol;
+    }
+
+    return "Loading...";
+  };
+
+  // Determine if we can proceed based on current step
+  const canProceed = () => {
+    if (step === 'select-asset') return !!selectedAsset;
+    if (step === 'enter-amount') return !!amount && parseFloat(amount) > 0;
+    return true;
+  };
 
   // Handle moving to the next step
   const handleNextStep = () => {
@@ -96,196 +324,10 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     }
   };
 
-  // Determine if an asset is from the Polkadot Asset Hub 
-  const isFromAssetHub = (location: XcmVersionedLocation | undefined): boolean => {
-    if (!location) return false;
-
-    console.log('Checking location:', location);
-
-    if (location.type === "V4" || location.type === "V3" || location.type === "V2") {
-      const parents = location.value.parents;
-      const interior = location.value.interior;
-
-      // Check for parent = 1 (indicating Asset Hub)
-      if (parents !== 1) return false;
-
-      // Check interior for Parachain(1000)
-      const hasParachain1000 = (() => {
-        switch (interior.type) {
-          case "X1":
-            return interior.value.type === "Parachain" && interior.value.value === 1000;
-          case "X2":
-            return interior.value[0]?.type === "Parachain" && interior.value[0]?.value === 1000;
-          case "X3":
-            return interior.value[0]?.type === "Parachain" && interior.value[0]?.value === 1000;
-          case "X4":
-            return interior.value[0]?.type === "Parachain" && interior.value[0]?.value === 1000;
-          default:
-            return false;
-        }
-      })();
-
-      return hasParachain1000;
-    }
-
-    return false;
-  };
-
-  // Handle bridge using user's Asset Hub account to transfer to DAO account on InvArch
-  const [_, executeBridge] = useMutation(
-    (builder) => {
-      if (!selectedAsset || !amount || !selectedAccount || !coreStorage) {
-        throw new Error("Missing required data for bridge operation");
-      }
-
-      console.log('Selected Account:', coreStorage.account);
-      // Convert amount to proper decimals
-      const _rawAmount = BigInt(Math.floor(parseFloat(amount) * Math.pow(10, selectedAsset.metadata.decimals)));
-
-      const assetHubId = getAssetHubId(selectedAsset.metadata.location);
-      if (assetHubId === undefined) {
-        throw new Error("Selected asset does not have a location for XCM transfer");
-      }
-
-      // Check if location exists
-      if (!selectedAsset.metadata.location) {
-        throw new Error("Selected asset does not have a location for XCM transfer");
-      }
-
-      // Check if this is an Asset Hub asset
-      if (!isFromAssetHub(selectedAsset.metadata.location)) {
-        throw new Error("Only Asset Hub assets are supported at this time");
-      }
-
-      showNotification({
-        variant: "success",
-        message: "Preparing XCM bridge transaction...",
-      });
-
-      return builder.PolkadotXcm.limited_reserve_transfer_assets({
-        dest: {
-          type: "V4",
-          value: {
-            parents: 1,
-            interior: {
-              type: "X1",
-              value: {
-                type: "Parachain",
-                value: 3340 // InvArch parachain ID
-              }
-            }
-          }
-        },
-        beneficiary: {
-          type: "V4",
-          value: {
-            parents: 0,
-            interior: {
-              type: "X1",
-              value: {
-                type: "AccountId32",
-                value: {
-                  network: undefined,
-                  id: FixedSizeBinary.fromAccountId32(coreStorage.account)
-                }
-              }
-            }
-          }
-        },
-        assets: {
-          type: "V4",
-          value: [
-            {
-              id: {
-                parents: 0,
-                interior: {
-                  type: "X2",
-                  value: [
-                    {
-                      type: "PalletInstance",
-                      value: 50 // Assets pallet
-                    },
-                    {
-                      type: "GeneralIndex",
-                      value: BigInt(assetHubId)
-                    }
-                  ]
-                }
-              },
-              fun: {
-                type: "Fungible",
-                value: _rawAmount
-              }
-            }
-          ]
-        },
-        fee_asset_item: 0,
-        weight_limit: {
-          type: "Unlimited",
-          value: undefined
-        }
-      });
-    },
-    { chainId: "polkadot_asset_hub" }
-  );
-
-  useMutationEffect((event) => {
-    setIsProcessing(true);
-
-    if (event.value === pending) {
-      return;
-    }
-
-    if (event.value instanceof MutationError) {
-      setIsProcessing(false);
-      showNotification({
-        variant: "error",
-        message: "Failed to prepare bridge transaction: " + event.value.message,
-      });
-      return;
-    }
-
-    // For successful transactions, we've already shown instructional notifications
-    setTimeout(() => {
-      setIsProcessing(false);
-      onClose();
-    }, 7000);
-  });
-
-  const handleBridgeIn = async () => {
-    if (!selectedAsset || !coreStorage || !amount || !selectedAccount) {
-      showNotification({
-        variant: "error",
-        message: "Please select an asset, enter an amount, and connect a wallet.",
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      await executeBridge();
-    } catch (error) {
-      console.error("Failed to prepare bridge transaction:", error);
-      showNotification({
-        variant: "error",
-        message: "Failed to prepare bridge transaction: " + (error instanceof Error ? error.message : "Unknown error"),
-      });
-      setIsProcessing(false);
-    }
-  };
-
-  // Determine if we can proceed based on current step
-  const canProceed = () => {
-    if (step === 'select-asset') return !!selectedAsset;
-    if (step === 'enter-amount') return !!amount && parseFloat(amount) > 0;
-    return true;
-  };
-
   // Render appropriate content based on the current step
   const renderStepContent = () => {
-    const filteredAssets = registeredAssets
-      .filter(asset => asset.metadata.location !== undefined && isFromAssetHub(asset.metadata.location));
+    // Get the supported assets
+    const filteredAssets = getFilteredAssets();
 
     console.log('Filtered assets:', filteredAssets);
 
@@ -294,7 +336,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         return (
           <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
             <p className={css({ marginBottom: "1rem", color: "content" })}>
-              Select an asset from Asset Hub to bridge into the DAO
+              Select an asset to bridge into the DAO
             </p>
             <div className={css({
               display: "grid",
@@ -343,7 +385,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                 borderRadius: "md",
                 fontSize: "0.875rem"
               })}>
-                No Asset Hub assets are available. Make sure your assets are registered correctly.
+                No bridgeable assets are available. Make sure your assets are registered correctly.
               </p>
             )}
           </div>
@@ -369,12 +411,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
             />
             <div className={css({ fontSize: "0.85rem", color: "content.muted", display: "flex", flexDirection: "column", gap: "0.5rem" })}>
               <p>
-                Available balance: {assetHubBalance && typeof assetHubBalance === 'object' ?
-                  new DenominatedNumber(
-                    assetHubBalance.balance ?? 0n,
-                    selectedAsset?.metadata.decimals || 0
-                  ).toLocaleString() + " " + selectedAsset?.metadata.symbol
-                  : "Loading..."}
+                Available balance: {getFormattedBalance()}
               </p>
               <p>
                 Make sure you have enough funds in your Asset Hub account to cover the transaction fees.
@@ -443,7 +480,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         ) : (
           <Button
             onClick={handleBridgeIn}
-            pending={isProcessing}
+            pending={isProcessing || assetHubBridge.isProcessing}
             className={css({ display: "flex", alignItems: "center", gap: "0.5rem" })}
           >
             <CheckCircleIcon size={16} />
