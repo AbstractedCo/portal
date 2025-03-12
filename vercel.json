@@ -1,0 +1,4 @@
+{
+    "ignoreCommand": "echo 'Skipping preview deployment for this branch'"
+  }
+  
