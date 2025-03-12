@@ -4,11 +4,13 @@
   "entries": {
     "invarch": {
       "wsUrl": "wss://invarch-rpc.dwellir.com",
-      "metadata": ".papi/metadata/invarch.scale"
+      "metadata": ".papi/metadata/invarch.scale",
+      "genesis": "0x31a7d8914fb31c249b972f18c115f1e22b4b039abbcb03c73b6774c5642f9efe"
     },
     "polkadot_people": {
       "chain": "polkadot_people",
-      "metadata": ".papi/metadata/polkadot_people.scale"
+      "metadata": ".papi/metadata/polkadot_people.scale",
+      "genesis": "0x67fa177a097bfa18f77ea95ab56e9bcdfeb0e5b8a40e46298bb93e16b6fc5008"
     },
     "polkadot_asset_hub": {
       "chain": "polkadot_asset_hub",
