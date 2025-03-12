@@ -7,8 +7,7 @@ import { useLazyLoadDaoInfo } from '../../../features/daos/parameters-store'
 import { AccountListItem } from '../../../widgets/account-list-item'
 import { MutationError, pending } from "@reactive-dot/core";
 import { useLazyLoadQuery, useMutation, useMutationEffect } from "@reactive-dot/react";
-import { useAtomValue } from 'jotai'
-import { selectedDaoIdAtom, useLazyLoadSelectedDaoId } from '../../../features/daos/store'
+import { useLazyLoadSelectedDaoId } from '../../../features/daos/store'
 import { Binary } from 'polkadot-api'
 import { AccountVote } from '../../../features/daos/components/account-vote'
 import { Edit2Icon } from "lucide-react";
@@ -46,18 +45,17 @@ function DaoParametersPage() {
     return <p>Please select or create a DAO</p>;
   }
 
-  return <SuspendableDaoParametersPage />;
+  return <SuspendableDaoParametersPage daoId={daoId} />;
 
-  function SuspendableDaoParametersPage() {
+  function SuspendableDaoParametersPage({ daoId }: { daoId: number }) {
     const { showNotification } = useNotification()
     const [isEditing, setIsEditing] = useState(false)
     const [_isProcessing, _setIsProcessing] = useState(false)
-    const selectedDaoId = useAtomValue(selectedDaoIdAtom)
     const daoInfo = useLazyLoadDaoInfo()
 
     // Get member addresses directly like in members.tsx
     const memberAddresses = useLazyLoadQuery((builder) =>
-      builder.readStorageEntries("INV4", "CoreMembers", [selectedDaoId]),
+      builder.readStorageEntries("INV4", "CoreMembers", [daoId]),
     ).map(({ keyArgs: [_, address] }) => address);
 
     // Add state for editing tokens
@@ -65,11 +63,11 @@ function DaoParametersPage() {
 
     // Add balance queries
     const balances = useLazyLoadQuery((builder) =>
-      builder.readStorages("CoreAssets", "Accounts", memberAddresses.map(address => [address, selectedDaoId] as const))
+      builder.readStorages("CoreAssets", "Accounts", memberAddresses.map(address => [address, daoId] as const))
     );
 
     const totalTokens = useLazyLoadQuery((builder) =>
-      builder.readStorage("CoreAssets", "TotalIssuance", [selectedDaoId])
+      builder.readStorage("CoreAssets", "TotalIssuance", [daoId])
     );
 
     const [_editFormData, _setEditFormData] = useState<EditTokenFormData>({
@@ -81,19 +79,10 @@ function DaoParametersPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [_updateTokensState, updateTokens] = useMutation((tx) => {
-      if (typeof selectedDaoId !== 'number') throw new Error('DAO ID not found');
       if (!tokenParams) throw new Error('No token parameters provided');
 
-      // Max u128 value
-      const MAX_U128 = 2n ** 128n - 1n;
-
-      // Validate amount is within u128 range
-      if (tokenParams.difference > MAX_U128) {
-        throw new Error('Amount exceeds maximum value');
-      }
-
       return tx.INV4.operate_multisig({
-        dao_id: selectedDaoId,
+        dao_id: daoId,
         call: (tokenParams.difference > 0n
           ? tx.INV4.token_mint({
             target: tokenParams.target,
@@ -181,10 +170,10 @@ function DaoParametersPage() {
     })
 
     const [_updateState, updateParameters] = useMutation((tx) => {
-      if (!daoInfo || typeof selectedDaoId !== 'number') throw new Error('DAO info not found');
+      if (!daoInfo) throw new Error('DAO info not found');
 
       return tx.INV4.operate_multisig({
-        dao_id: selectedDaoId,
+        dao_id: daoId,
         call: tx.INV4.set_parameters({
           metadata: formData.metadata !== daoInfo.metadata.asText()
             ? Binary.fromText(formData.metadata)
@@ -286,7 +275,7 @@ function DaoParametersPage() {
       }
     };
 
-    if (typeof selectedDaoId !== 'number' || !daoInfo) {
+    if (!daoInfo) {
       return <div>Loading...</div>
     }
 
@@ -644,7 +633,7 @@ function DaoParametersPage() {
                       />
                     ) : (
                       <>
-                        <AccountVote daoId={selectedDaoId} address={address} />
+                        <AccountVote daoId={daoId} address={address} />
                         <td className={css({
                           textAlign: "center",
                           padding: "1rem",
