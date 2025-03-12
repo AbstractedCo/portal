@@ -8,6 +8,14 @@ import {
 } from "@tanstack/react-router";
 import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAccountBalance, useDaoBalance } from "../../features/accounts/store";
+import { ConnectionButton } from "dot-connect/react.js";
+import { Select } from "../../components/select";
+import { useAtom } from "jotai";
+import { selectedAccountIdAtom } from "../../features/accounts/store";
+import { useAccounts } from "@reactive-dot/react";
+import { PolkadotIdenticon } from "dot-identicon/react.js";
+import { CircularProgressIndicator } from "../../components/circular-progress-indicator";
+import { Suspense } from "react";
 
 const DECIMALS = 12;
 
@@ -19,6 +27,27 @@ function Layout() {
   const location = useLocation();
   const personalBalance = useAccountBalance();
   const daoBalance = useDaoBalance();
+
+  // Custom AccountSelect implementation for the sidebar
+  function CustomAccountSelect() {
+    const accounts = useAccounts();
+    const [selectedAccount, setSelectedAccount] = useAtom(selectedAccountIdAtom);
+
+    return (
+      <Suspense fallback={<CircularProgressIndicator />}>
+        <Select
+          value={selectedAccount}
+          onChangeValue={setSelectedAccount}
+          options={accounts.map((account) => ({
+            value: account.wallet.id + account.address,
+            label: account.name ?? account.address,
+            icon: <PolkadotIdenticon address={account.address} />,
+          }))}
+          placeholder="Please select an account"
+        />
+      </Suspense>
+    );
+  }
 
   const formatDenominated = (balance: bigint) => {
     if (!balance) return "--";
@@ -57,12 +86,6 @@ function Layout() {
       >
         <dt>Available Balance</dt>
         <dd>{formatDenominated(personalBalance.free)}</dd>
-        {/* <dt>Reserved Balance</dt>
-        <dd>{formatDenominated(personalBalance.reserved)}</dd>
-        <dt>Frozen Balance</dt>
-        <dd>{formatDenominated(personalBalance.frozen)}</dd>
-        <dt>Total Balance</dt>
-        <dd>{formatDenominated(personalBalance.free + personalBalance.reserved)}</dd> */}
       </dl>
     </article>
   );
@@ -98,14 +121,37 @@ function Layout() {
       >
         <dt>Free Native Balance</dt>
         <dd>{formatDenominated(daoBalance.free)}</dd>
-        {/* <dt>Reserved Native Balance</dt>
-        <dd>{formatDenominated(daoBalance.reserved)}</dd>
-        <dt>Frozen Native Balance</dt>
-        <dd>{formatDenominated(daoBalance.frozen)}</dd>
-        <dt>Total Native Balance</dt>
-        <dd>{formatDenominated(daoBalance.free + daoBalance.reserved)}</dd> */}
       </dl>
     </article>
+  );
+
+  // Account selector container for desktop sidebar
+  const AccountSelectorComponent = () => (
+    <div className={css({
+      display: "flex",
+      alignItems: "center",
+      gap: "0.75rem",
+      justifyContent: "center",
+      marginBottom: "0.75rem",
+      "--dc-primary-color": "var(--colors-primary)",
+      "--dc-on-primary-color": "var(--colors-on-primary)",
+      "& > div": {
+        flex: 1,
+      },
+      "& [data-part='trigger']": {
+        display: "inline-flex",
+        alignItems: "center",
+        minHeight: "3.5rem",
+        padding: "0.5rem 0.75rem",
+        "& > *": {
+          display: "flex",
+          alignItems: "center",
+        }
+      }
+    })}>
+      <CustomAccountSelect />
+      <ConnectionButton />
+    </div>
   );
 
   return (
@@ -134,6 +180,7 @@ function Layout() {
           },
         })}
       >
+        <AccountSelectorComponent />
         <PersonalAssetsComponent />
         <DaoAssetsComponent />
       </div>

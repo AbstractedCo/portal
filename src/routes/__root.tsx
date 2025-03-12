@@ -29,6 +29,7 @@ import {
   Link,
   Outlet,
   useRouterState,
+  useLocation,
 } from "@tanstack/react-router";
 import { registerDotConnect } from "dot-connect";
 import "dot-connect/font.css";
@@ -296,6 +297,8 @@ type TopBarProps = { className?: string };
 
 function TopBar({ className }: TopBarProps) {
   const matches = useRouterState({ select: (s) => s.matches });
+  const location = useLocation();
+  const isDaoRoute = location.pathname.startsWith('/daos');
 
   const title = matches.at(-1)?.context.title;
 
@@ -309,6 +312,9 @@ function TopBar({ className }: TopBarProps) {
           gap: "1rem",
           "@media(max-width: 48rem)": {
             justifyContent: "center",
+          },
+          "@media(min-width: 64rem)": {
+            display: isDaoRoute ? "none" : "flex", // Hide on desktop for DAO routes
           },
         }),
         className,
@@ -337,7 +343,10 @@ function TopBar({ className }: TopBarProps) {
           flexShrink: 0,
           "@media(max-width: 48rem)": {
             margin: "0 auto",
-          }
+          },
+          "@media(min-width: 64rem)": {
+            display: isDaoRoute ? "none" : "flex", // Hide account selector on desktop for DAO routes
+          },
         })}
       >
         <AccountSelect />
