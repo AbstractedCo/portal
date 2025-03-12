@@ -1,5 +1,5 @@
 import type { XcmV2Junction, XcmV3Junction, XcmVersionedLocation, XcmV3Junctions, XcmV3MultiassetFungibility } from "@polkadot-api/descriptors";
-import { FixedSizeBinary } from "polkadot-api";
+import { FixedSizeBinary, type SS58String } from "polkadot-api";
 
 // Chain Configuration
 export const CHAIN_CONFIG = {
@@ -212,7 +212,7 @@ export function createInvArchDestination(): XcmVersionedLocation {
   };
 }
 
-export function createBeneficiary(account: string): XcmVersionedLocation {
+export function createBeneficiary(account: SS58String): XcmVersionedLocation {
   return {
     type: "V4",
     value: {
