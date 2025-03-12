@@ -4,73 +4,87 @@ import { useState } from "react";
 import { TextInput } from "./text-input";
 import { useNotification } from "../contexts/notification-context";
 import { css } from "../../styled-system/css";
-import { useLazyLoadRegisteredAssets } from "../features/assets/store";
-import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
 import { useLazyLoadQuery } from "@reactive-dot/react";
-import { selectedAccountAtom } from "../features/accounts/store";
-import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import { DenominatedNumber } from "@reactive-dot/utils";
-import { getAssetHubId } from "../features/xcm/xcm-utils";
 import {
-  useAssetHubBridgeInOperation,
+  useInvArchBridgeOutOperation,
   type BridgeStatusChange,
-  isBridgeSupportedIn,
-  isNativeToken
+  isBridgeSupportedOut
 } from "../features/xcm/bridge-utils";
+import type { Binary, SS58String } from "polkadot-api";
 
-interface BridgeAssetsInDialogProps {
+interface BridgeAssetsOutDialogProps {
   daoId: number;
   onClose: () => void;
 }
 
-export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogProps) {
+// Define interfaces for our data structures to properly type them
+interface AssetMetadata {
+  symbol: Binary;
+  name: Binary;
+  decimals: number;
+}
+
+interface TokenBalance {
+  keyArgs: [SS58String, number]; // [accountId, assetId]
+  value: {
+    free: bigint;
+    reserved: bigint;
+    frozen: bigint;
+  };
+}
+
+interface Asset {
+  id: number;
+  value: {
+    free: bigint;
+    reserved: bigint;
+    frozen: bigint;
+  };
+  metadata: {
+    symbol: string;
+    decimals: number;
+    name: string;
+  };
+}
+
+export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogProps) {
   const [selectedAsset, setSelectedAsset] = useState<{
     id: number;
     metadata: {
       symbol: string;
       decimals: number;
       name: string;
-      existential_deposit: bigint;
-      location: XcmVersionedLocation | undefined;
-      additional: bigint;
     };
   } | null>(null);
 
   const [amount, setAmount] = useState("");
+  const [destinationAccount, setDestinationAccount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<'select-asset' | 'enter-amount' | 'review'>('select-asset');
   const { showNotification } = useNotification();
-  const registeredAssets = useLazyLoadRegisteredAssets();
-  const selectedAccount = useAtomValue(selectedAccountAtom);
 
-  // Get the asset ID for the selected asset
-  const getAssetId = () => {
-    if (!selectedAsset) return undefined;
+  // Get the DAO's core storage to access its account
+  const coreStorage = useLazyLoadQuery((builder) =>
+    builder.readStorage("INV4", "CoreStorage", [daoId]),
+  );
 
-    console.log("Getting asset ID for:", selectedAsset);
+  // Query DAO's token balances with proper typing
+  const daoTokens: TokenBalance[] = useLazyLoadQuery((builder) => {
+    if (!coreStorage?.account) return null;
+    return builder.readStorageEntries("Tokens", "Accounts", [coreStorage.account]);
+  }) as unknown as TokenBalance[] || [];
 
-    // For native tokens like DOT, use the asset ID directly
-    if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
-      // Ensure the ID is a valid number before converting to BigInt
-      if (typeof selectedAsset.id === 'number' && !isNaN(selectedAsset.id)) {
-        console.log("Converting native token ID to BigInt:", selectedAsset.id);
-        return BigInt(selectedAsset.id);
-      }
-      console.log("Invalid native token ID:", selectedAsset.id);
-      return undefined;
-    }
-
-    // For other assets, get the ID from the location
-    if (selectedAsset.metadata.location) {
-      const assetHubId = getAssetHubId(selectedAsset.metadata.location);
-      console.log("Asset Hub ID from location:", assetHubId);
-      return assetHubId;
-    }
-
-    console.log("No valid location found for asset ID");
-    return undefined;
-  };
+  // Get asset metadata for the tokens with proper typing
+  const assetMetadata: AssetMetadata[] = useLazyLoadQuery((builder) => {
+    if (!daoTokens?.length) return null;
+    return builder.readStorages(
+      "AssetRegistry",
+      "Metadata",
+      daoTokens.map((token) => [token.keyArgs[1]] as const),
+    );
+  }) as unknown as AssetMetadata[] || [];
 
   // Convert amount to proper decimals
   const getRawAmount = () => {
@@ -113,35 +127,6 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     }
   };
 
-  // Query user's balance on Asset Hub for the selected asset
-  const assetHubBalance = useLazyLoadQuery(
-    (builder) => {
-      if (!selectedAsset || !selectedAccount?.address) return undefined;
-
-      // For native tokens like DOT
-      if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
-        // Use the special query for native token balance
-        return builder.readStorage("System", "Account", [selectedAccount.address]);
-      }
-
-      // For other assets from Asset Hub
-      if (selectedAsset.metadata.location) {
-        const assetHubId = getAssetHubId(selectedAsset.metadata.location);
-        if (assetHubId === undefined) return undefined;
-
-        return builder.readStorage("Assets", "Account", [Number(assetHubId), selectedAccount.address]);
-      }
-
-      return undefined;
-    },
-    { chainId: "polkadot_asset_hub" }
-  );
-
-  // Get the DAO's core storage to access its account
-  const coreStorage = useLazyLoadQuery((builder) =>
-    builder.readStorage("INV4", "CoreStorage", [daoId]),
-  );
-
   // Function to handle status changes from the bridge
   const handleBridgeStatusChange = (status: BridgeStatusChange) => {
     // Update processing state
@@ -161,58 +146,44 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
 
   // Only provide bridge parameters when they're all valid
   const getBridgeParams = () => {
-    const assetId = getAssetId();
     const rawAmount = getRawAmount();
-    const beneficiaryAccount = coreStorage?.account;
 
     // Add debugging information
-    console.log("Asset ID:", assetId);
     console.log("Raw amount:", rawAmount);
     console.log("Selected asset:", selectedAsset);
+    console.log("Destination account:", destinationAccount);
 
-    if (!rawAmount || !beneficiaryAccount || !selectedAsset) {
-      console.log("Missing required parameters", { rawAmount, beneficiaryAccount, selectedAsset });
+    if (!rawAmount || !destinationAccount || !selectedAsset) {
+      console.log("Missing required parameters", { rawAmount, destinationAccount, selectedAsset });
       return undefined;
     }
-
-    // If we have a native token, assetId might be optional in some cases
-    // Otherwise, ensure we have a valid assetId
-    if (!isNativeToken(selectedAsset.metadata.location) && assetId === undefined) {
-      console.log("Asset ID is required for non-native tokens but is undefined");
-      return undefined;
-    }
-
-    // For non-native tokens, we must have verified there's a valid assetId above
-    // This ensures assetId is always a bigint for non-native tokens
-    // For native tokens, default to 0n if needed
-    const finalAssetId = assetId !== undefined ? assetId : 0n;
 
     return {
-      beneficiaryAccount,
-      assetLocation: selectedAsset.metadata.location,
-      assetId: finalAssetId,
+      destinationAccount,
+      assetId: BigInt(selectedAsset.id),
       amount: rawAmount,
+      daoId,
       onStatusChange: handleBridgeStatusChange,
       onComplete: () => {
         setIsProcessing(false);
         showNotification({
           variant: "success",
-          message: `Bridge of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`
+          message: `Bridge out of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`
         });
         onClose();
       }
     };
   };
 
-  // Set up the Asset Hub bridge with the current parameters
-  const assetHubBridge = useAssetHubBridgeInOperation(getBridgeParams());
+  // Set up the InvArch bridge out operation with the current parameters
+  const invArchBridge = useInvArchBridgeOutOperation(getBridgeParams());
 
   // Handle bridge operation
-  const handleBridgeIn = async () => {
-    if (!selectedAsset || !coreStorage || !amount || !selectedAccount) {
+  const handleBridgeOut = async () => {
+    if (!selectedAsset || !destinationAccount || !amount) {
       showNotification({
         variant: "error",
-        message: "Please select an asset, enter an amount, and connect a wallet.",
+        message: "Please select an asset, enter an amount, and provide a destination account.",
       });
       return;
     }
@@ -227,18 +198,6 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
       return;
     }
 
-    // For assets that need an ID, validate it
-    if (!isNativeToken(selectedAsset.metadata.location)) {
-      const assetId = getAssetId();
-      if (assetId === undefined) {
-        showNotification({
-          variant: "error",
-          message: "Selected asset does not have a valid ID for transfer"
-        });
-        return;
-      }
-    }
-
     // Get raw amount and validate it
     const rawAmount = getRawAmount();
     if (rawAmount === undefined) {
@@ -250,59 +209,71 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     }
 
     try {
-      console.log("Starting bridge execution with params:", getBridgeParams());
+      console.log("Starting bridge out execution with params:", getBridgeParams());
       // Execute the bridge operation
-      await assetHubBridge.executeBridge();
+      await invArchBridge.executeBridgeOut();
     } catch (error) {
-      console.error("Failed to submit bridge transaction:", error);
+      console.error("Failed to submit bridge out transaction:", error);
       showNotification({
         variant: "error",
-        message: "Failed to submit bridge transaction: " + (error instanceof Error ? error.message : "Unknown error"),
+        message: "Failed to submit bridge out transaction: " + (error instanceof Error ? error.message : "Unknown error"),
       });
       setIsProcessing(false);
     }
   };
 
-  // Filter assets to only show those with supported bridges
-  const getFilteredAssets = () => {
-    return registeredAssets
-      .filter(asset => {
-        if (!asset.metadata.location) return false;
-        // Check if we have a bridge implementation for this asset location
-        return isBridgeSupportedIn(asset.metadata.location);
+  // Combine tokens with their metadata
+  const getAvailableAssets = (): Asset[] => {
+    if (!daoTokens || !assetMetadata) return [];
+
+    const assets: Asset[] = [];
+
+    for (let i = 0; i < daoTokens.length; i++) {
+      if (!daoTokens[i] || !assetMetadata[i]) continue;
+
+      // Explicitly check for token properties to satisfy TypeScript
+      const token = daoTokens[i];
+      if (!token || !token.keyArgs || !token.value) continue;
+
+      // Explicitly check for metadata properties to satisfy TypeScript
+      const metadata = assetMetadata[i];
+      if (!metadata || metadata.symbol === undefined || metadata.decimals === undefined || metadata.name === undefined) continue;
+
+      if (!isBridgeSupportedOut(token.keyArgs[1])) continue;
+
+      assets.push({
+        id: token.keyArgs[1],
+        value: token.value,
+        metadata: {
+          symbol: metadata.symbol.asText(),
+          decimals: metadata.decimals,
+          name: metadata.name.asText()
+        }
       });
+    }
+
+    return assets;
   };
 
   // Get formatted balance for display
   const getFormattedBalance = () => {
-    if (!selectedAsset || !assetHubBalance) return "Loading...";
+    if (!selectedAsset || !daoTokens) return "Loading...";
 
-    // For native tokens (like DOT)
-    if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
-      if (typeof assetHubBalance === 'object' && 'data' in assetHubBalance) {
-        const freeBalance = assetHubBalance.data?.free || 0n;
-        return new DenominatedNumber(
-          freeBalance,
-          selectedAsset.metadata.decimals
-        ).toLocaleString() + " " + selectedAsset.metadata.symbol;
-      }
-    }
+    const token = daoTokens.find(t => t?.keyArgs?.[1] === selectedAsset.id);
+    if (!token || !token.value || !token.value.free) return "Loading...";
 
-    // For other assets
-    if (typeof assetHubBalance === 'object' && 'balance' in assetHubBalance) {
-      return new DenominatedNumber(
-        assetHubBalance.balance ?? 0n,
-        selectedAsset.metadata.decimals
-      ).toLocaleString() + " " + selectedAsset.metadata.symbol;
-    }
-
-    return "Loading...";
+    return new DenominatedNumber(
+      token.value.free,
+      selectedAsset.metadata.decimals
+    ).toLocaleString() + " " + selectedAsset.metadata.symbol;
   };
 
   // Determine if we can proceed based on current step
   const canProceed = () => {
     if (step === 'select-asset') return !!selectedAsset;
-    if (step === 'enter-amount') return !!amount && parseFloat(amount) > 0;
+    if (step === 'enter-amount') {
+      return !!amount && parseFloat(amount) > 0 && destinationAccount.length > 0;
+    }
     return true;
   };
 
@@ -310,7 +281,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
   const handleNextStep = () => {
     if (step === 'select-asset' && selectedAsset) {
       setStep('enter-amount');
-    } else if (step === 'enter-amount' && amount) {
+    } else if (step === 'enter-amount' && amount && destinationAccount) {
       setStep('review');
     }
   };
@@ -326,17 +297,15 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
 
   // Render appropriate content based on the current step
   const renderStepContent = () => {
-    // Get the supported assets
-    const filteredAssets = getFilteredAssets();
-
-    console.log('Filtered assets:', filteredAssets);
+    // Get the available assets
+    const availableAssets = getAvailableAssets();
 
     switch (step) {
       case 'select-asset':
         return (
           <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
             <p className={css({ marginBottom: "1rem", color: "content" })}>
-              Select an asset to bridge into the DAO
+              Select an asset to bridge out of the DAO to Asset Hub
             </p>
             <div className={css({
               display: "grid",
@@ -348,7 +317,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               borderRadius: "md",
               border: "1px solid token(colors.surfaceContainerHighest)"
             })}>
-              {filteredAssets.map((asset) => (
+              {availableAssets.map((asset) => (
                 <button
                   key={asset.id}
                   onClick={() => setSelectedAsset(asset)}
@@ -372,11 +341,16 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                   <span className={css({
                     fontSize: "0.875rem",
                     color: selectedAsset?.id === asset.id ? "onPrimary" : "content.muted"
-                  })}>Asset Hub</span>
+                  })}>
+                    {new DenominatedNumber(
+                      asset.value.free,
+                      asset.metadata.decimals
+                    ).toLocaleString()}
+                  </span>
                 </button>
               ))}
             </div>
-            {filteredAssets.length === 0 && (
+            {availableAssets.length === 0 && (
               <p className={css({
                 textAlign: "center",
                 color: "content.muted",
@@ -385,7 +359,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                 borderRadius: "md",
                 fontSize: "0.875rem"
               })}>
-                No bridgeable assets are available. Make sure your assets are registered correctly.
+                No bridgeable assets are available in this DAO. Try adding some assets first.
               </p>
             )}
           </div>
@@ -395,7 +369,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         return (
           <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
             <p className={css({ marginBottom: "1rem" })}>
-              Enter the amount of {selectedAsset?.metadata.symbol} to bridge from your Asset Hub account to the DAO
+              Enter the amount of {selectedAsset?.metadata.symbol} to bridge from the DAO to Asset Hub
             </p>
             <TextInput
               label={`Amount (${selectedAsset?.metadata.symbol})`}
@@ -414,8 +388,17 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               <p>
                 Available balance: {getFormattedBalance()}
               </p>
+            </div>
+            <TextInput
+              label="Destination Account (Asset Hub)"
+              value={destinationAccount}
+              onChangeValue={setDestinationAccount}
+              placeholder="Enter the destination account SS58 address"
+              className={css({ width: "100%" })}
+            />
+            <div className={css({ fontSize: "0.85rem", color: "content.muted", display: "flex", flexDirection: "column", gap: "0.5rem" })}>
               <p>
-                Make sure you have enough funds in your Asset Hub account to cover the transaction fees.
+                Make sure the destination account exists on Asset Hub and can receive the assets.
               </p>
             </div>
           </div>
@@ -425,7 +408,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         return (
           <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
             <h3 className={css({ fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1rem" })}>
-              Review Your Bridge Transaction
+              Review Your Bridge Out Transaction
             </h3>
             <div className={css({ display: "flex", flexDirection: "column", gap: "0.5rem" })}>
               <div className={css({ display: "flex", justifyContent: "space-between" })}>
@@ -438,15 +421,15 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               </div>
               <div className={css({ display: "flex", justifyContent: "space-between" })}>
                 <span>From:</span>
-                <span>Your Asset Hub Account</span>
+                <span>DAO Account: {coreStorage?.account ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}` : "Loading..."}</span>
               </div>
               <div className={css({ display: "flex", justifyContent: "space-between" })}>
                 <span>To:</span>
-                <span>DAO Account: {coreStorage?.account ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}` : "Loading..."}</span>
+                <span>Asset Hub Account: {destinationAccount ? `${destinationAccount.substring(0, 6)}...${destinationAccount.substring(destinationAccount.length - 6)}` : "Loading..."}</span>
               </div>
             </div>
             <p className={css({ fontSize: "0.85rem", color: "content.muted", marginTop: "1rem" })}>
-              After confirming, you will need to sign the transaction to bridge the assets in to the DAO.
+              After confirming, you will need to sign to create a proposal for the transaction to bridge the assets to Asset Hub.
             </p>
           </div>
         );
@@ -463,7 +446,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
             className={css({
               display: "inline-flex",
               alignItems: "center",
-              gap: "0.5rem",
+              gap: "0.2rem",
               width: "auto"
             })}
           >
@@ -483,7 +466,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
             className={css({
               display: "inline-flex",
               alignItems: "center",
-              gap: "0.5rem",
+              gap: "0.2rem",
               width: "auto"
             })}
           >
@@ -494,8 +477,8 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
           </Button>
         ) : (
           <Button
-            onClick={handleBridgeIn}
-            pending={isProcessing || assetHubBridge.isProcessing}
+            onClick={handleBridgeOut}
+            pending={isProcessing || invArchBridge.isProcessing}
             className={css({
               display: "inline-flex",
               alignItems: "center",
@@ -504,8 +487,8 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
             })}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <span>Bridge Out Assets</span>
               <CheckCircleIcon size={16} />
-              <span>Show Bridge Instructions</span>
             </div>
           </Button>
         )}
@@ -516,7 +499,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
   // Main component render
   return (
     <ModalDialog
-      title="Bridge Your Assets Into DAO"
+      title="Bridge Your Assets Out of DAO"
       onClose={onClose}
       className={css({
         containerType: "inline-size",
@@ -566,7 +549,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                 color: step === stepName ? "content" : "content.muted"
               })}>
                 {stepName === "select-asset" ? "Select Asset" :
-                  stepName === "enter-amount" ? "Enter Amount" : "Review"}
+                  stepName === "enter-amount" ? "Enter Details" : "Review"}
               </span>
             </div>
           ))}

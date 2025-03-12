@@ -14,6 +14,7 @@ import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
 import { MutationError, pending } from "@reactive-dot/core";
 import { QRCodeSVG } from "qrcode.react";
 import { BridgeAssetsInDialog } from "../../../components/xcm-in";
+import { BridgeAssetsOutDialog } from "../../../components/xcm-out";
 
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
@@ -88,6 +89,7 @@ function AssetsPage() {
       const [transferDialogOpen, setTransferDialogOpen] = useState(false);
       const [depositDialogOpen, setDepositDialogOpen] = useState(false);
       const [bridgeInDialogOpen, setBridgeInDialogOpen] = useState(false);
+      const [bridgeOutDialogOpen, setBridgeOutDialogOpen] = useState(false);
 
       // First, add this state at the component level where both dialogs are rendered
       const [transferDialogState, setTransferDialogState] = useState<{
@@ -163,8 +165,8 @@ function AssetsPage() {
             </Button>
 
             <Button
-              onClick={() => {/* TODO */ }}
-              disabled={true}
+              onClick={() => setBridgeOutDialogOpen(true)}
+              disabled={false}
               className={buttonStyle}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
@@ -238,6 +240,13 @@ function AssetsPage() {
             <BridgeAssetsInDialog
               daoId={daoId!}
               onClose={() => setBridgeInDialogOpen(false)}
+            />
+          )}
+
+          {bridgeOutDialogOpen && (
+            <BridgeAssetsOutDialog
+              daoId={daoId!}
+              onClose={() => setBridgeOutDialogOpen(false)}
             />
           )}
 
