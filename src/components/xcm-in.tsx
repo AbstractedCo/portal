@@ -18,6 +18,8 @@ import {
   isBridgeSupportedIn,
   isNativeToken
 } from "../features/xcm/bridge-utils";
+import { useMutation, useMutationEffect } from "@reactive-dot/react";
+import { MutationError, pending } from "@reactive-dot/core";
 
 interface BridgeAssetsInDialogProps {
   daoId: number;
@@ -35,6 +37,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
       location: XcmVersionedLocation | undefined;
       additional: bigint;
     };
+    isNativeVarch?: boolean; // Flag to indicate if this is the native VARCH token
   } | null>(null);
 
   const [amount, setAmount] = useState("");
@@ -43,6 +46,16 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
   const { showNotification } = useNotification();
   const registeredAssets = useLazyLoadRegisteredAssets();
   const selectedAccount = useAtomValue(selectedAccountAtom);
+
+  // Get the DAO's core storage to access its account
+  const coreStorage = useLazyLoadQuery((builder) =>
+    builder.readStorage("INV4", "CoreStorage", [daoId]),
+  );
+
+  // Query user's native VARCH balance 
+  const nativeBalance = useLazyLoadQuery((builder) =>
+    selectedAccount?.address ? builder.readStorage("System", "Account", [selectedAccount.address]) : null
+  );
 
   // Get the asset ID for the selected asset
   const getAssetId = () => {
@@ -137,11 +150,6 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     { chainId: "polkadot_asset_hub" }
   );
 
-  // Get the DAO's core storage to access its account
-  const coreStorage = useLazyLoadQuery((builder) =>
-    builder.readStorage("INV4", "CoreStorage", [daoId]),
-  );
-
   // Function to handle status changes from the bridge
   const handleBridgeStatusChange = (status: BridgeStatusChange) => {
     // Update processing state
@@ -158,6 +166,71 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
       onClose();
     }
   };
+
+  // Set up the transfer mutation for native VARCH
+  const [_nativeTransferState, executeNativeTransfer] = useMutation((builder) => {
+    if (!coreStorage?.account || !amount || !selectedAccount?.address) {
+      throw new Error("Missing required parameters for transfer");
+    }
+
+    const rawAmount = getRawAmount();
+    if (!rawAmount) {
+      throw new Error("Could not convert amount to the correct format");
+    }
+
+    // Regular transfer of native VARCH to the DAO account
+    return builder.Balances.transfer_keep_alive({
+      dest: {
+        type: "Id",
+        value: coreStorage.account
+      },
+      value: rawAmount
+    });
+  });
+
+  // Handle native transfer mutation events
+  useMutationEffect((event) => {
+    if (event.value === pending) {
+      setIsProcessing(true);
+      showNotification({
+        variant: "success",
+        message: "Submitting VARCH transfer..."
+      });
+      return;
+    }
+
+    if (event.value instanceof MutationError) {
+      setIsProcessing(false);
+      showNotification({
+        variant: "error",
+        message: "Failed to submit transfer"
+      });
+      return;
+    }
+
+    switch (event.value.type) {
+      case "finalized":
+        setIsProcessing(false);
+        if (event.value.ok) {
+          showNotification({
+            variant: "success",
+            message: `Transfer of ${amount} VARCH was successful!`
+          });
+          onClose();
+        } else {
+          showNotification({
+            variant: "error",
+            message: "Transaction failed"
+          });
+        }
+        break;
+      default:
+        showNotification({
+          variant: "success",
+          message: "Transaction pending..."
+        });
+    }
+  });
 
   // Only provide bridge parameters when they're all valid
   const getBridgeParams = () => {
@@ -227,18 +300,6 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
       return;
     }
 
-    // For assets that need an ID, validate it
-    if (!isNativeToken(selectedAsset.metadata.location)) {
-      const assetId = getAssetId();
-      if (assetId === undefined) {
-        showNotification({
-          variant: "error",
-          message: "Selected asset does not have a valid ID for transfer"
-        });
-        return;
-      }
-    }
-
     // Get raw amount and validate it
     const rawAmount = getRawAmount();
     if (rawAmount === undefined) {
@@ -250,14 +311,22 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     }
 
     try {
+      // If this is native VARCH, use regular transfer instead of bridge
+      if (selectedAsset.isNativeVarch) {
+        console.log("Starting native VARCH transfer");
+        await executeNativeTransfer();
+        return;
+      }
+
+      // For other assets, use the bridge
       console.log("Starting bridge execution with params:", getBridgeParams());
       // Execute the bridge operation
       await assetHubBridge.executeBridge();
     } catch (error) {
-      console.error("Failed to submit bridge transaction:", error);
+      console.error("Failed to submit transaction:", error);
       showNotification({
         variant: "error",
-        message: "Failed to submit bridge transaction: " + (error instanceof Error ? error.message : "Unknown error"),
+        message: "Failed to submit transaction: " + (error instanceof Error ? error.message : "Unknown error"),
       });
       setIsProcessing(false);
     }
@@ -275,7 +344,21 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
 
   // Get formatted balance for display
   const getFormattedBalance = () => {
-    if (!selectedAsset || !assetHubBalance) return "Loading...";
+    if (!selectedAsset) return "Loading...";
+
+    // For native VARCH token
+    if (selectedAsset.isNativeVarch) {
+      if (nativeBalance && typeof nativeBalance === 'object' && 'data' in nativeBalance && nativeBalance.data) {
+        return new DenominatedNumber(
+          nativeBalance.data.free || 0n,
+          selectedAsset.metadata.decimals
+        ).toLocaleString() + " " + selectedAsset.metadata.symbol;
+      }
+      return "Loading...";
+    }
+
+    // For other assets, use the existing code
+    if (!assetHubBalance) return "Loading...";
 
     // For native tokens (like DOT)
     if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
@@ -329,6 +412,20 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     // Get the supported assets
     const filteredAssets = getFilteredAssets();
 
+    // Create VARCH asset object
+    const varchAsset = {
+      id: 0,
+      metadata: {
+        symbol: "VARCH",
+        decimals: 12,
+        name: "InvArch",
+        existential_deposit: 1000000000000n,
+        location: undefined,
+        additional: 0n
+      },
+      isNativeVarch: true
+    };
+
     console.log('Filtered assets:', filteredAssets);
 
     switch (step) {
@@ -336,45 +433,110 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         return (
           <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
             <p className={css({ marginBottom: "1rem", color: "content" })}>
-              Select an asset to bridge into the DAO
+              Select an asset to fund the DAO
             </p>
             <div className={css({
               display: "grid",
               gap: "0.5rem",
-              maxHeight: "300px",
+              maxHeight: "min(400px, 50vh)",
               overflowY: "auto",
-              padding: "0.5rem",
+              padding: "1rem",
               backgroundColor: "surfaceContainer",
-              borderRadius: "md",
-              border: "1px solid token(colors.surfaceContainerHighest)"
+              borderRadius: "xl",
+              border: "1px solid token(colors.surfaceContainerHighest)",
+              "@media (max-width: 768px)": {
+                maxHeight: "min(300px, 40vh)",
+                padding: "0.75rem"
+              }
             })}>
-              {filteredAssets.map((asset) => (
+              {/* Add VARCH as the first option */}
+              <div className={css({
+                marginBottom: "1.5rem",
+              })}>
+                <h4 className={css({
+                  fontSize: "0.9rem",
+                  fontWeight: "500",
+                  color: "content.muted",
+                  marginBottom: "0.75rem",
+                  paddingLeft: "0.5rem"
+                })}>
+                  Native Token
+                </h4>
                 <button
-                  key={asset.id}
-                  onClick={() => setSelectedAsset(asset)}
+                  key="varch"
+                  onClick={() => setSelectedAsset(varchAsset)}
                   className={css({
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "0.75rem 1rem",
-                    backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHigh",
-                    color: selectedAsset?.id === asset.id ? "onPrimary" : "content",
+                    backgroundColor: selectedAsset?.isNativeVarch ? "primary" : "surfaceContainerHigh",
+                    color: selectedAsset?.isNativeVarch ? "onPrimary" : "content",
                     border: "none",
-                    borderRadius: "md",
+                    borderRadius: "lg",
                     cursor: "pointer",
                     transition: "all 0.2s ease",
+                    width: "100%",
                     "&:hover": {
-                      backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHighest",
+                      backgroundColor: selectedAsset?.isNativeVarch ? "primary" : "surfaceContainerHighest",
                     }
                   })}
                 >
-                  <span className={css({ fontWeight: "500" })}>{asset.metadata.symbol}</span>
+                  <span className={css({ fontWeight: "500" })}>VARCH</span>
                   <span className={css({
                     fontSize: "0.875rem",
-                    color: selectedAsset?.id === asset.id ? "onPrimary" : "content.muted"
-                  })}>Asset Hub</span>
+                    color: selectedAsset?.isNativeVarch ? "onPrimary" : "content.muted"
+                  })}>Native</span>
                 </button>
-              ))}
+              </div>
+
+              {/* Bridged assets section */}
+              {filteredAssets.length > 0 && (
+                <div>
+                  <h4 className={css({
+                    fontSize: "0.9rem",
+                    fontWeight: "500",
+                    color: "content.muted",
+                    marginBottom: "0.75rem",
+                    paddingLeft: "0.5rem"
+                  })}>
+                    Asset Hub Tokens
+                  </h4>
+                  <div className={css({
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.75rem"
+                  })}>
+                    {filteredAssets.map((asset) => (
+                      <button
+                        key={asset.id}
+                        onClick={() => setSelectedAsset(asset)}
+                        className={css({
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "0.75rem 1rem",
+                          backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHigh",
+                          color: selectedAsset?.id === asset.id ? "onPrimary" : "content",
+                          border: "none",
+                          borderRadius: "lg",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          "&:hover": {
+                            backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHighest",
+                          }
+                        })}
+                      >
+                        <span className={css({ fontWeight: "500" })}>{asset.metadata.symbol}</span>
+                        <span className={css({
+                          fontSize: "0.875rem",
+                          color: selectedAsset?.id === asset.id ? "onPrimary" : "content.muted"
+                        })}>Asset Hub</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             {filteredAssets.length === 0 && (
               <p className={css({
@@ -385,7 +547,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                 borderRadius: "md",
                 fontSize: "0.875rem"
               })}>
-                No bridgeable assets are available. Make sure your assets are registered correctly.
+                No assets are available. Make sure your wallet is connected.
               </p>
             )}
           </div>
@@ -395,7 +557,10 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         return (
           <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
             <p className={css({ marginBottom: "1rem" })}>
-              Enter the amount of {selectedAsset?.metadata.symbol} to bridge from your Asset Hub account to the DAO
+              {selectedAsset?.isNativeVarch ?
+                `Enter the amount of VARCH to transfer to the DAO` :
+                `Enter the amount of ${selectedAsset?.metadata.symbol} to bridge from your Asset Hub account to the DAO`
+              }
             </p>
             <TextInput
               label={`Amount (${selectedAsset?.metadata.symbol})`}
@@ -415,7 +580,10 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                 Available balance: {getFormattedBalance()}
               </p>
               <p>
-                Make sure you have enough funds in your Asset Hub account to cover the transaction fees.
+                {selectedAsset?.isNativeVarch ?
+                  `Make sure you have enough funds in your account to cover the transaction fees.` :
+                  `Make sure you have enough funds in your Asset Hub account to cover the transaction fees.`
+                }
               </p>
             </div>
           </div>
@@ -425,7 +593,10 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         return (
           <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
             <h3 className={css({ fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1rem" })}>
-              Review Your Bridge Transaction
+              {selectedAsset?.isNativeVarch ?
+                `Review Your Transfer` :
+                `Review Your Bridge Transaction`
+              }
             </h3>
             <div className={css({ display: "flex", flexDirection: "column", gap: "0.5rem" })}>
               <div className={css({ display: "flex", justifyContent: "space-between" })}>
@@ -438,7 +609,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               </div>
               <div className={css({ display: "flex", justifyContent: "space-between" })}>
                 <span>From:</span>
-                <span>Your Asset Hub Account</span>
+                <span>{selectedAsset?.isNativeVarch ? "Your InvArch Account" : "Your Asset Hub Account"}</span>
               </div>
               <div className={css({ display: "flex", justifyContent: "space-between" })}>
                 <span>To:</span>
@@ -446,7 +617,10 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               </div>
             </div>
             <p className={css({ fontSize: "0.85rem", color: "content.muted", marginTop: "1rem" })}>
-              After confirming, you will need to sign the transaction to bridge the assets in to the DAO.
+              {selectedAsset?.isNativeVarch ?
+                `After confirming, you will need to sign the transaction to transfer VARCH to the DAO.` :
+                `After confirming, you will need to sign the transaction to bridge the assets in to the DAO.`
+              }
             </p>
           </div>
         );
@@ -500,12 +674,29 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               display: "inline-flex",
               alignItems: "center",
               gap: "0.5rem",
-              width: "auto"
+              width: "auto",
+              "@media (max-width: 768px)": {
+                fontSize: "0.875rem",
+                padding: "0.5rem 0.75rem"
+              }
             })}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
               <CheckCircleIcon size={16} />
-              <span>Show Bridge Instructions</span>
+              <span>{selectedAsset?.isNativeVarch ? "Transfer VARCH" : (
+                <span className={css({
+                  "@media (max-width: 768px)": {
+                    display: "none"
+                  }
+                })}>Show Bridge Instructions</span>
+              )}
+                {!selectedAsset?.isNativeVarch && (
+                  <span className={css({
+                    "@media (min-width: 769px)": {
+                      display: "none"
+                    }
+                  })}>Bridge</span>
+                )}</span>
             </div>
           </Button>
         )}
@@ -513,10 +704,21 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     );
   };
 
+  // Get dynamic dialog title based on asset and step
+  const getDialogTitle = () => {
+    if (!selectedAsset) return "Fund Your DAO";
+
+    if (selectedAsset.isNativeVarch) {
+      return "Transfer VARCH to DAO";
+    } else {
+      return "Bridge Assets Into DAO";
+    }
+  };
+
   // Main component render
   return (
     <ModalDialog
-      title="Bridge Your Assets Into DAO"
+      title={getDialogTitle()}
       onClose={onClose}
       className={css({
         containerType: "inline-size",
