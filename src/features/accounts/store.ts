@@ -1,8 +1,13 @@
+/// <reference types="vite/client" />
 import { selectedDaoIdAtom } from "../daos/store";
 import { atomWithLocalStorage } from "../jotai/utils";
 import type { WalletAccount } from "@reactive-dot/core/wallets.js";
 import { useLazyLoadQuery } from "@reactive-dot/react";
 import { atom, useAtomValue } from "jotai";
+
+// Debug mode constants
+const DEBUG_MODE = import.meta.env["VITE_DEBUG_MODE"] === "true";
+const DEBUG_ACCOUNT = import.meta.env["VITE_DEBUG_ACCOUNT"];
 
 export const accountsAtom = atom<WalletAccount[]>([]);
 
@@ -15,13 +20,23 @@ export const selectedAccountAtom = atom(
   (get) => {
     const selectedAccountId = get(selectedAccountIdAtom);
 
-    if (selectedAccountId === undefined) {
+    if (selectedAccountId === undefined && !DEBUG_MODE) {
       return;
     }
 
-    return get(accountsAtom).find(
+    // In debug mode, override the account address
+    const account = get(accountsAtom).find(
       (account) => account.wallet.id + account.address === selectedAccountId,
     );
+
+    if (DEBUG_MODE && DEBUG_ACCOUNT) {
+      return {
+        ...account,
+        address: DEBUG_ACCOUNT,
+      };
+    }
+
+    return account;
   },
   (_, set, account: WalletAccount) =>
     set(selectedAccountIdAtom, account.wallet.id + account.address),

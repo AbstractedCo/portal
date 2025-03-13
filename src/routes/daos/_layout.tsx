@@ -6,8 +6,10 @@ import {
   useAccountBalance,
   useDaoBalance,
 } from "../../features/accounts/store";
-import { selectedAccountIdAtom } from "../../features/accounts/store";
-import { useAccounts } from "@reactive-dot/react";
+import { selectedAccountAtom } from "../../features/accounts/store";
+import { useLazyLoadSelectedDaoId } from "../../features/daos/store";
+import { useTokenPrices, useTotalValue } from "../../features/prices/store";
+import { useAccounts, useLazyLoadQuery } from "@reactive-dot/react";
 import { DenominatedNumber } from "@reactive-dot/utils";
 import {
   createFileRoute,
@@ -17,8 +19,8 @@ import {
 } from "@tanstack/react-router";
 import { ConnectionButton } from "dot-connect/react.js";
 import { PolkadotIdenticon } from "dot-identicon/react.js";
-import { useAtom } from "jotai";
-import { Suspense } from "react";
+import { useAtom, useAtomValue } from "jotai";
+import { Suspense, useEffect } from "react";
 
 const DECIMALS = 12;
 
@@ -28,23 +30,36 @@ export const Route = createFileRoute("/daos/_layout")({
 
 function Layout() {
   const location = useLocation();
-  const personalBalance = useAccountBalance();
-  const daoBalance = useDaoBalance();
+
+  // Initialize price fetching at the top level
+  // This uses the singleton pattern to ensure only one price fetcher runs
+  // and follows the 10-minute cache rules defined in store
+  const { isLoading: pricesLoading, error: pricesError } = useTokenPrices();
+
+  // Log any price fetching errors but don't spam the console
+  useEffect(() => {
+    if (pricesError) {
+      console.warn("Price fetching error:", pricesError);
+    }
+  }, [pricesError]);
 
   // Custom AccountSelect implementation for the sidebar
   function CustomAccountSelect() {
     const accounts = useAccounts();
-    const [selectedAccount, setSelectedAccount] = useAtom(
-      selectedAccountIdAtom,
-    );
+    const [selectedAccount, setSelectedAccount] = useAtom(selectedAccountAtom);
 
     return (
       <Suspense fallback={<CircularProgressIndicator />}>
         <Select
-          value={selectedAccount}
-          onChangeValue={setSelectedAccount}
+          value={selectedAccount?.address}
+          onChangeValue={(address) => {
+            const account = accounts.find((acc) => acc.address === address);
+            if (account) {
+              setSelectedAccount(account);
+            }
+          }}
           options={accounts.map((account) => ({
-            value: account.wallet.id + account.address,
+            value: account.address,
             label: account.name ?? account.address,
             icon: <PolkadotIdenticon address={account.address} />,
           }))}
@@ -59,80 +74,367 @@ function Layout() {
     return new DenominatedNumber(balance, DECIMALS, "VARCH").toLocaleString();
   };
 
-  // Create asset components to use in both mobile and desktop layouts
-  const PersonalAssetsComponent = () => (
-    <article
-      className={css({
-        backgroundColor: "surfaceContainer",
-        borderRadius: "1rem",
-        padding: "2rem",
-      })}
-    >
-      <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
-        Personal Assets
-      </header>
-      <dl
-        className={css({
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) max-content",
-          "& dt": {
-            borderBottom: "0.25px solid {colors.outlineVariant}",
-            padding: "1rem 1rem 1rem 0",
-            color: "content.muted",
-          },
-          "& dd": {
-            padding: "1rem 0 1rem 1rem",
-            borderBottom: "1.5px solid {colors.outline}",
-            textAlign: "end",
-          },
-          "& :is(dd, dt):last-of-type": {
-            borderWidth: 0,
-            paddingBottom: 0,
-          },
-        })}
-      >
-        <dt>Available Balance</dt>
-        <dd>{formatDenominated(personalBalance.free)}</dd>
-      </dl>
-    </article>
-  );
+  const formatUSD = (value: number) => {
+    if (!value && value !== 0) return "--";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
 
-  const DaoAssetsComponent = () => (
-    <article
-      className={css({
-        backgroundColor: "surfaceContainer",
-        borderRadius: "1rem",
-        padding: "2rem",
-      })}
-    >
-      <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
-        DAO Assets
-      </header>
-      <dl
+  // Create asset components to use in both mobile and desktop layouts
+  const PersonalAssetsComponent = () => {
+    const selectedAccount = useAtomValue(selectedAccountAtom);
+    const accountAddress = selectedAccount?.address || "";
+    const personalBalance = useAccountBalance();
+
+    // Always call hooks unconditionally, but handle missing data inside
+    const personalTokensResult = useLazyLoadQuery((builder) => {
+      if (!selectedAccount?.address) return null;
+      return builder.readStorageEntries("Tokens", "Accounts", [accountAddress]);
+    });
+
+    // Safely handle the result
+    const personalTokens = personalTokensResult
+      ? Array.isArray(personalTokensResult)
+        ? personalTokensResult
+        : []
+      : [];
+
+    const assetMetadataResult = useLazyLoadQuery((builder) => {
+      if (!personalTokens || personalTokens.length === 0) return null;
+
+      return builder.readStorages(
+        "AssetRegistry",
+        "Metadata",
+        personalTokens.map((token) => [token.keyArgs[1]] as const),
+      );
+    });
+
+    // Safely handle the result
+    const assetMetadata = assetMetadataResult
+      ? Array.isArray(assetMetadataResult)
+        ? assetMetadataResult
+        : []
+      : [];
+
+    // Create a function to prepare tokens array consistently
+    const prepareTokens = () => {
+      const result = [];
+
+      // Add other tokens if available
+      personalTokens
+        .filter((token) => token && token.keyArgs && token.keyArgs[1] !== 0)
+        .forEach((token, index) => {
+          if (index < assetMetadata.length) {
+            const metadata = assetMetadata[index];
+            if (metadata) {
+              result.push({
+                id: token.keyArgs[1],
+                value: token.value,
+                metadata: {
+                  symbol: metadata.symbol?.asText() ?? "UNKNOWN",
+                  decimals: metadata.decimals ?? DECIMALS,
+                },
+              });
+            }
+          }
+        });
+
+      // Add native token if available
+      if (personalBalance) {
+        result.push({
+          id: 0,
+          value: {
+            free: personalBalance.free,
+            reserved: personalBalance.reserved,
+            frozen: personalBalance.frozen,
+          },
+          metadata: {
+            symbol: "VARCH",
+            decimals: DECIMALS,
+          },
+        });
+      }
+
+      return result;
+    };
+
+    // Calculate total value using the price store
+    // This will use the cached prices that refresh every 10 minutes
+    const tokens = prepareTokens();
+    const { total: totalValue, isLoading: valuationLoading } =
+      useTotalValue(tokens);
+
+    const isLoading = !personalTokens || !personalBalance;
+
+    // Show loading state or no account selected state
+    if (!selectedAccount) {
+      return (
+        <article
+          className={css({
+            backgroundColor: "surfaceContainer",
+            borderRadius: "1rem",
+            padding: "2rem",
+          })}
+        >
+          <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
+            Personal Assets
+          </header>
+          <div className={css({ color: "content.muted" })}>
+            Please select an account to view assets
+          </div>
+        </article>
+      );
+    }
+
+    if (isLoading) {
+      return (
+        <article
+          className={css({
+            backgroundColor: "surfaceContainer",
+            borderRadius: "1rem",
+            padding: "2rem",
+          })}
+        >
+          <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
+            Personal Assets
+          </header>
+          <CircularProgressIndicator />
+        </article>
+      );
+    }
+
+    const safeBalance = {
+      free: personalBalance?.free || BigInt(0),
+      reserved: personalBalance?.reserved || BigInt(0),
+      frozen: personalBalance?.frozen || BigInt(0),
+    };
+
+    return (
+      <article
         className={css({
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) max-content",
-          "& dt": {
-            borderBottom: "0.25px solid {colors.outlineVariant}",
-            padding: "1rem 1rem 1rem 0",
-            color: "content.muted",
-          },
-          "& dd": {
-            padding: "1rem 0 1rem 1rem",
-            borderBottom: "1.5px solid {colors.outline}",
-            textAlign: "end",
-          },
-          "& :is(dd, dt):last-of-type": {
-            borderWidth: 0,
-            paddingBottom: 0,
-          },
+          backgroundColor: "surfaceContainer",
+          borderRadius: "1rem",
+          padding: "2rem",
         })}
       >
-        <dt>Free Native Balance</dt>
-        <dd>{formatDenominated(daoBalance.free)}</dd>
-      </dl>
-    </article>
-  );
+        <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
+          Personal Assets
+        </header>
+        <dl
+          className={css({
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) max-content",
+            "& dt": {
+              borderBottom: "0.25px solid {colors.outlineVariant}",
+              padding: "1rem 1rem 1rem 0",
+              color: "content.muted",
+            },
+            "& dd": {
+              padding: "1rem 0 1rem 1rem",
+              borderBottom: "1.5px solid {colors.outline}",
+              textAlign: "end",
+            },
+            "& :is(dd, dt):last-of-type": {
+              borderWidth: 0,
+              paddingBottom: 0,
+            },
+          })}
+        >
+          <dt>Available Balance</dt>
+          <dd>{formatDenominated(safeBalance.free)}</dd>
+          <dt>Total Portfolio Value</dt>
+          <dd>
+            {pricesLoading || valuationLoading ? "--" : formatUSD(totalValue)}
+          </dd>
+        </dl>
+      </article>
+    );
+  };
+
+  const DaoAssetsComponent = () => {
+    const daoId = useLazyLoadSelectedDaoId();
+    const daoBalance = useDaoBalance();
+
+    // Get the DAO storage without throwing errors when no ID exists
+    const coreStorage = useLazyLoadQuery((builder) => {
+      if (!daoId) return null;
+      return builder.readStorage("INV4", "CoreStorage", [daoId]);
+    });
+
+    // Safely handle the coreStorage result
+    const account =
+      coreStorage && typeof coreStorage === "object" && "account" in coreStorage
+        ? coreStorage.account
+        : "";
+
+    // Always call hooks unconditionally but handle missing data inside
+    const daoTokensResult = useLazyLoadQuery((builder) => {
+      if (!account) return null;
+      return builder.readStorageEntries("Tokens", "Accounts", [account]);
+    });
+
+    // Safely handle the result
+    const daoTokens = daoTokensResult
+      ? Array.isArray(daoTokensResult)
+        ? daoTokensResult
+        : []
+      : [];
+
+    const assetMetadataResult = useLazyLoadQuery((builder) => {
+      if (!daoTokens || daoTokens.length === 0) return null;
+
+      return builder.readStorages(
+        "AssetRegistry",
+        "Metadata",
+        daoTokens.map((token) => [token.keyArgs[1]] as const),
+      );
+    });
+
+    // Safely handle the result
+    const assetMetadata = assetMetadataResult
+      ? Array.isArray(assetMetadataResult)
+        ? assetMetadataResult
+        : []
+      : [];
+
+    // Create a function to prepare tokens array consistently
+    const prepareTokens = () => {
+      const result = [];
+
+      // Add other tokens if available
+      daoTokens
+        .filter((token) => token && token.keyArgs && token.keyArgs[1] !== 0)
+        .forEach((token, index) => {
+          if (index < assetMetadata.length) {
+            const metadata = assetMetadata[index];
+            if (metadata) {
+              result.push({
+                id: token.keyArgs[1],
+                value: token.value,
+                metadata: {
+                  symbol: metadata.symbol?.asText() ?? "UNKNOWN",
+                  decimals: metadata.decimals ?? DECIMALS,
+                },
+              });
+            }
+          }
+        });
+
+      // Add native token if available
+      if (daoBalance) {
+        result.push({
+          id: 0,
+          value: {
+            free: daoBalance.free,
+            reserved: daoBalance.reserved,
+            frozen: daoBalance.frozen,
+          },
+          metadata: {
+            symbol: "VARCH",
+            decimals: DECIMALS,
+          },
+        });
+      }
+
+      return result;
+    };
+
+    // Calculate total value using the price store
+    // This will use the cached prices that refresh every 10 minutes
+    const tokens = prepareTokens();
+    const { total: totalValue, isLoading: valuationLoading } =
+      useTotalValue(tokens);
+
+    const isLoading = !daoTokens || !daoBalance;
+
+    // Show loading state or no DAO selected state
+    if (!daoId) {
+      return (
+        <article
+          className={css({
+            backgroundColor: "surfaceContainer",
+            borderRadius: "1rem",
+            padding: "2rem",
+          })}
+        >
+          <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
+            DAO Assets
+          </header>
+          <div className={css({ color: "content.muted" })}>
+            Please select a DAO to view assets
+          </div>
+        </article>
+      );
+    }
+
+    if (isLoading) {
+      return (
+        <article
+          className={css({
+            backgroundColor: "surfaceContainer",
+            borderRadius: "1rem",
+            padding: "2rem",
+          })}
+        >
+          <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
+            DAO Assets
+          </header>
+          <CircularProgressIndicator />
+        </article>
+      );
+    }
+
+    const safeBalance = {
+      free: daoBalance?.free || BigInt(0),
+      reserved: daoBalance?.reserved || BigInt(0),
+      frozen: daoBalance?.frozen || BigInt(0),
+    };
+
+    return (
+      <article
+        className={css({
+          backgroundColor: "surfaceContainer",
+          borderRadius: "1rem",
+          padding: "2rem",
+        })}
+      >
+        <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
+          DAO Assets
+        </header>
+        <dl
+          className={css({
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) max-content",
+            "& dt": {
+              borderBottom: "0.25px solid {colors.outlineVariant}",
+              padding: "1rem 1rem 1rem 0",
+              color: "content.muted",
+            },
+            "& dd": {
+              padding: "1rem 0 1rem 1rem",
+              borderBottom: "1.5px solid {colors.outline}",
+              textAlign: "end",
+            },
+            "& :is(dd, dt):last-of-type": {
+              borderWidth: 0,
+              paddingBottom: 0,
+            },
+          })}
+        >
+          <dt>Free Native Balance</dt>
+          <dd>{formatDenominated(safeBalance.free)}</dd>
+          <dt>Total Portfolio Value</dt>
+          <dd>
+            {pricesLoading || valuationLoading ? "--" : formatUSD(totalValue)}
+          </dd>
+        </dl>
+      </article>
+    );
+  };
 
   // Account selector container for desktop sidebar
   const AccountSelectorComponent = () => (

@@ -516,21 +516,53 @@ export function BridgeAssetsOutDialog({
                 display: "flex",
                 flexDirection: "column",
                 gap: "4",
-                width: "100%",
               })}
             >
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  marginBottom: "1.5rem",
+                })}
+              >
+                <label
+                  className={css({
+                    color: "content.muted",
+                    fontSize: "0.875rem",
+                    userSelect: "none",
+                  })}
+                >
+                  Destination Account ({destinationChain})
+                </label>
+                <button
+                  onClick={useSelectedAccountAsDestination}
+                  className={css({
+                    background: "none",
+                    border: "none",
+                    padding: "0 0.25rem",
+                    color: "primary",
+                    fontSize: "0.75rem",
+                    cursor: "pointer",
+                    transition: "opacity 0.2s ease",
+                    userSelect: "none",
+                    "&:hover": {
+                      opacity: 0.8,
+                    },
+                  })}
+                >
+                  Use my account
+                </button>
+              </div>
               <TextInput
-                label={`Destination Account (${destinationChain})`}
                 value={destinationAccount}
                 onChangeValue={setDestinationAccount}
                 placeholder="Enter destination account address"
+                className={css({
+                  width: "100%",
+                  marginBottom: "1rem",
+                })}
               />
-              <Button
-                onClick={useSelectedAccountAsDestination}
-                className={css({ marginTop: "2" })}
-              >
-                Use My Account Address
-              </Button>
             </div>
             <div
               className={css({
