@@ -21,6 +21,24 @@ import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import { useState } from "react";
 
+// Helper function to get the appropriate icon for a token
+const getTokenIcon = (symbol: string) => {
+  const normalizedSymbol = symbol.toUpperCase();
+  
+  switch (normalizedSymbol) {
+    case 'DOT':
+      return '/polkadot-new-dot-logo.svg';
+    case 'USDT':
+      return '/tether-usdt-logo.svg';
+    case 'USDC':
+      return '/usd-coin-usdc-logo.svg';
+    case 'VARCH':
+      return '/invarch-logo.svg';
+    default:
+      return null;
+  }
+};
+
 interface BridgeAssetsInDialogProps {
   daoId: number;
   onClose: () => void;
@@ -555,7 +573,22 @@ export function BridgeAssetsInDialog({
                     },
                   })}
                 >
-                  <span className={css({ fontWeight: "500" })}>VARCH</span>
+                  <div className={css({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                  })}>
+                    <img 
+                      src="/invarch-logo.svg" 
+                      alt="VARCH icon" 
+                      className={css({
+                        width: "1.5rem",
+                        height: "1.5rem",
+                        objectFit: "contain",
+                      })} 
+                    />
+                    <span className={css({ fontWeight: "500" })}>VARCH</span>
+                  </div>
                   <span
                     className={css({
                       fontSize: "0.875rem",
@@ -590,69 +623,91 @@ export function BridgeAssetsInDialog({
                       gap: "0.75rem",
                     })}
                   >
-                    {filteredAssets.map((asset) => (
-                      <button
-                        key={asset.id}
-                        onClick={() => setSelectedAsset(asset)}
-                        className={css({
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "0.75rem 1rem",
-                          backgroundColor:
-                            selectedAsset?.id === asset.id
-                              ? "primary"
-                              : "surfaceContainerHigh",
-                          color:
-                            selectedAsset?.id === asset.id
-                              ? "onPrimary"
-                              : "content",
-                          border: "none",
-                          borderRadius: "lg",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          "&:hover": {
+                    {filteredAssets.map((asset) => {
+                      const iconPath = getTokenIcon(asset.metadata.symbol);
+                      
+                      return (
+                        <button
+                          key={asset.id}
+                          onClick={() => setSelectedAsset(asset)}
+                          className={css({
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "0.75rem 1rem",
                             backgroundColor:
                               selectedAsset?.id === asset.id
                                 ? "primary"
-                                : "surfaceContainerHighest",
-                          },
-                        })}
-                      >
-                        <span className={css({ fontWeight: "500" })}>
-                          {asset.metadata.symbol}
-                        </span>
-                        <span
-                          className={css({
-                            fontSize: "0.875rem",
+                                : "surfaceContainerHigh",
                             color:
                               selectedAsset?.id === asset.id
                                 ? "onPrimary"
-                                : "content.muted",
+                                : "content",
+                            border: "none",
+                            borderRadius: "lg",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                            "&:hover": {
+                              backgroundColor:
+                                selectedAsset?.id === asset.id
+                                  ? "primary"
+                                  : "surfaceContainerHighest",
+                            },
                           })}
                         >
-                          Asset Hub
-                        </span>
-                      </button>
-                    ))}
+                          <div className={css({
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.75rem",
+                          })}>
+                            {iconPath && (
+                              <img 
+                                src={iconPath} 
+                                alt={`${asset.metadata.symbol} icon`} 
+                                className={css({
+                                  width: "1.5rem",
+                                  height: "1.5rem",
+                                  objectFit: "contain",
+                                })} 
+                              />
+                            )}
+                            <span className={css({ fontWeight: "500" })}>
+                              {asset.metadata.symbol}
+                            </span>
+                          </div>
+                          <span
+                            className={css({
+                              fontSize: "0.875rem",
+                              color:
+                                selectedAsset?.id === asset.id
+                                  ? "onPrimary"
+                                  : "content.muted",
+                            })}
+                          >
+                            {asset.metadata.name}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
+
+              {filteredAssets.length === 0 && (
+                <p
+                  className={css({
+                    textAlign: "center",
+                    color: "content.muted",
+                    padding: "1rem",
+                    backgroundColor: "surfaceContainer",
+                    borderRadius: "md",
+                    fontSize: "0.875rem",
+                  })}
+                >
+                  No assets are available. Make sure your wallet is connected.
+                </p>
+              )}
             </div>
-            {filteredAssets.length === 0 && (
-              <p
-                className={css({
-                  textAlign: "center",
-                  color: "content.muted",
-                  padding: "1rem",
-                  backgroundColor: "surfaceContainer",
-                  borderRadius: "md",
-                  fontSize: "0.875rem",
-                })}
-              >
-                No assets are available. Make sure your wallet is connected.
-              </p>
-            )}
           </div>
         );
 
@@ -665,11 +720,32 @@ export function BridgeAssetsInDialog({
               gap: "1rem",
             })}
           >
-            <p className={css({ marginBottom: "1rem" })}>
-              {selectedAsset?.isNativeVarch
-                ? `Enter the amount of VARCH to transfer to the DAO`
-                : `Enter the amount of ${selectedAsset?.metadata.symbol} to bridge from your Asset Hub account to the DAO`}
-            </p>
+            <div className={css({
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              marginBottom: "1rem",
+            })}>
+              {selectedAsset && (
+                <>
+                  {(selectedAsset.isNativeVarch || getTokenIcon(selectedAsset.metadata.symbol)) && (
+                    <img 
+                      src={selectedAsset.isNativeVarch ? "/invarch-logo.svg" : getTokenIcon(selectedAsset.metadata.symbol) || ''} 
+                      alt={`${selectedAsset.metadata.symbol} icon`} 
+                      className={css({
+                        width: "1.5rem",
+                        height: "1.5rem",
+                        objectFit: "contain",
+                      })} 
+                    />
+                  )}
+                  <p>
+                    Enter the amount of {selectedAsset.metadata.symbol} to bridge to the DAO
+                  </p>
+                </>
+              )}
+            </div>
+
             <TextInput
               label={`Amount (${selectedAsset?.metadata.symbol})`}
               value={amount}

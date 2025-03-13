@@ -16,6 +16,24 @@ import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import type { Binary, SS58String } from "polkadot-api";
 import { useState } from "react";
 
+// Helper function to get the appropriate icon for a token
+const getTokenIcon = (symbol: string) => {
+  const normalizedSymbol = symbol.toUpperCase();
+  
+  switch (normalizedSymbol) {
+    case 'DOT':
+      return '/polkadot-new-dot-logo.svg';
+    case 'USDT':
+      return '/tether-usdt-logo.svg';
+    case 'USDC':
+      return '/usd-coin-usdc-logo.svg';
+    case 'VARCH':
+      return '/invarch-logo.svg';
+    default:
+      return null;
+  }
+};
+
 interface BridgeAssetsOutDialogProps {
   daoId: number;
   onClose: () => void;
@@ -403,54 +421,75 @@ export function BridgeAssetsOutDialog({
                     gap: "0.75rem",
                   })}
                 >
-                  {availableAssets.map((asset) => (
-                    <button
-                      key={asset.id}
-                      onClick={() => setSelectedAsset(asset)}
-                      className={css({
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "0.75rem 1rem",
-                        backgroundColor:
-                          selectedAsset?.id === asset.id
-                            ? "primary"
-                            : "surfaceContainerHigh",
-                        color:
-                          selectedAsset?.id === asset.id
-                            ? "onPrimary"
-                            : "content",
-                        border: "none",
-                        borderRadius: "lg",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        "&:hover": {
+                  {availableAssets.map((asset) => {
+                    const iconPath = getTokenIcon(asset.metadata.symbol);
+                    
+                    return (
+                      <button
+                        key={asset.id}
+                        onClick={() => setSelectedAsset(asset)}
+                        className={css({
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "0.75rem 1rem",
                           backgroundColor:
                             selectedAsset?.id === asset.id
                               ? "primary"
-                              : "surfaceContainerHighest",
-                        },
-                      })}
-                    >
-                      <span className={css({ fontWeight: "500" })}>
-                        {asset.metadata.symbol}
-                      </span>
-                      <span
-                        className={css({
-                          fontSize: "0.875rem",
+                              : "surfaceContainerHigh",
                           color:
                             selectedAsset?.id === asset.id
                               ? "onPrimary"
-                              : "content.muted",
+                              : "content",
+                          border: "none",
+                          borderRadius: "lg",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          "&:hover": {
+                            backgroundColor:
+                              selectedAsset?.id === asset.id
+                                ? "primary"
+                                : "surfaceContainerHighest",
+                          },
                         })}
                       >
-                        {new DenominatedNumber(
-                          asset.value.free,
-                          asset.metadata.decimals,
-                        ).toLocaleString()}
-                      </span>
-                    </button>
-                  ))}
+                        <div className={css({
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                        })}>
+                          {iconPath && (
+                            <img 
+                              src={iconPath} 
+                              alt={`${asset.metadata.symbol} icon`} 
+                              className={css({
+                                width: "1.5rem",
+                                height: "1.5rem",
+                                objectFit: "contain",
+                              })} 
+                            />
+                          )}
+                          <span className={css({ fontWeight: "500" })}>
+                            {asset.metadata.symbol}
+                          </span>
+                        </div>
+                        <span
+                          className={css({
+                            fontSize: "0.875rem",
+                            color:
+                              selectedAsset?.id === asset.id
+                                ? "onPrimary"
+                                : "content.muted",
+                          })}
+                        >
+                          {new DenominatedNumber(
+                            asset.value.free,
+                            asset.metadata.decimals,
+                          ).toLocaleString()}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -481,10 +520,32 @@ export function BridgeAssetsOutDialog({
               gap: "1rem",
             })}
           >
-            <p className={css({ marginBottom: "1rem" })}>
-              Enter the amount of {selectedAsset?.metadata.symbol} to bridge
-              from the DAO to {destinationChain}
-            </p>
+            <div className={css({
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              marginBottom: "1rem",
+            })}>
+              {selectedAsset && (
+                <>
+                  {getTokenIcon(selectedAsset.metadata.symbol) && (
+                    <img 
+                      src={getTokenIcon(selectedAsset.metadata.symbol) || ''} 
+                      alt={`${selectedAsset.metadata.symbol} icon`} 
+                      className={css({
+                        width: "1.5rem",
+                        height: "1.5rem",
+                        objectFit: "contain",
+                      })} 
+                    />
+                  )}
+                  <p>
+                    Enter the amount of {selectedAsset.metadata.symbol} to bridge
+                    from the DAO to {destinationChain}
+                  </p>
+                </>
+              )}
+            </div>
             <TextInput
               label={`Amount (${selectedAsset?.metadata.symbol})`}
               value={amount}
@@ -587,34 +648,74 @@ export function BridgeAssetsOutDialog({
             className={css({
               display: "flex",
               flexDirection: "column",
-              gap: "1rem",
+              gap: "1.5rem",
+              alignItems: "center",
+              textAlign: "center",
             })}
           >
-            <h3
-              className={css({
-                fontSize: "1.1rem",
-                fontWeight: "bold",
-                marginBottom: "1rem",
-              })}
-            >
-              Review Your Bridge Out Transaction
-            </h3>
             <div
               className={css({
                 display: "flex",
                 flexDirection: "column",
+                alignItems: "center",
                 gap: "0.5rem",
+              })}
+            >
+              <h3
+                className={css({
+                  fontSize: "1.25rem",
+                  fontWeight: "600",
+                  color: "content",
+                })}
+              >
+                Review Bridge Transaction
+              </h3>
+              <p className={css({ color: "content.muted" })}>
+                Please review the details of your bridge transaction
+              </p>
+            </div>
+
+            <div
+              className={css({
+                display: "flex",
+                flexDirection: "column",
+                gap: "1rem",
+                width: "100%",
+                backgroundColor: "surfaceContainer",
+                padding: "1.5rem",
+                borderRadius: "xl",
               })}
             >
               <div
                 className={css({
                   display: "flex",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 })}
               >
-                <span>Asset:</span>
-                <span>{selectedAsset?.metadata.symbol}</span>
+                <span className={css({ color: "content.muted" })}>Asset</span>
+                <div className={css({
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                })}>
+                  {selectedAsset && getTokenIcon(selectedAsset.metadata.symbol) && (
+                    <img 
+                      src={getTokenIcon(selectedAsset.metadata.symbol) || ''} 
+                      alt={`${selectedAsset.metadata.symbol} icon`} 
+                      className={css({
+                        width: "1.25rem",
+                        height: "1.25rem",
+                        objectFit: "contain",
+                      })} 
+                    />
+                  )}
+                  <span className={css({ fontWeight: "500" })}>
+                    {selectedAsset?.metadata.symbol}
+                  </span>
+                </div>
               </div>
+
               <div
                 className={css({
                   display: "flex",

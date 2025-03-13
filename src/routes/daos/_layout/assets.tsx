@@ -16,6 +16,24 @@ import { Binary } from "polkadot-api";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
 
+// Helper function to get the appropriate icon for a token
+const getTokenIcon = (symbol: string) => {
+  const normalizedSymbol = symbol.toUpperCase();
+  
+  switch (normalizedSymbol) {
+    case 'DOT':
+      return '/polkadot-new-dot-logo.svg';
+    case 'USDT':
+      return '/tether-usdt-logo.svg';
+    case 'USDC':
+      return '/usd-coin-usdc-logo.svg';
+    case 'VARCH':
+      return '/invarch-logo.svg';
+    default:
+      return null;
+  }
+};
+
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
   beforeLoad: () => ({ title: "Assets" }),
@@ -243,54 +261,76 @@ function AssetsPage() {
               </tr>
             </thead>
             <tbody>
-              {tokens.map((token) => (
-                <tr key={token.id}>
-                  <td
-                    className={css({
-                      textAlign: "left",
-                      padding: "1rem",
-                    })}
-                  >
-                    {token.metadata.symbol.asText()}
-                  </td>
-                  <td
-                    className={css({
-                      textAlign: "right",
-                      padding: "1rem",
-                    })}
-                  >
-                    {new DenominatedNumber(
-                      BigIntMath.max(
-                        0n,
-                        token.value.free -
-                          BigIntMath.max(
-                            token.value.frozen - token.value.reserved,
-                            0n,
-                          ),
-                      ),
-                      token.metadata.decimals,
-                    ).toLocaleString() +
-                      " " +
-                      token.metadata.symbol.asText()}
-                  </td>
-                  <td
-                    className={css({
-                      textAlign: "right",
-                      padding: "1rem",
-                    })}
-                  >
-                    {new DenominatedNumber(
-                      BigIntMath.max(
-                        0n,
-                        token.value.free + token.value.reserved,
-                      ),
-                      token.metadata.decimals,
-                    ).toLocaleString() +
-                      " " +
-                      token.metadata.symbol.asText()}
-                  </td>
-                </tr>
-              ))}
+              {tokens.map((token) => {
+                const symbol = token.metadata.symbol.asText();
+                const iconPath = getTokenIcon(symbol);
+                
+                return (
+                  <tr key={token.id}>
+                    <td
+                      className={css({
+                        textAlign: "left",
+                        padding: "1rem",
+                      })}
+                    >
+                      <div className={css({
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                      })}>
+                        {iconPath && (
+                          <img 
+                            src={iconPath} 
+                            alt={`${symbol} icon`} 
+                            className={css({
+                              width: "1.5rem",
+                              height: "1.5rem",
+                              objectFit: "contain",
+                            })} 
+                          />
+                        )}
+                        <span>{symbol}</span>
+                      </div>
+                    </td>
+                    <td
+                      className={css({
+                        textAlign: "right",
+                        padding: "1rem",
+                      })}
+                    >
+                      {new DenominatedNumber(
+                        BigIntMath.max(
+                          0n,
+                          token.value.free -
+                            BigIntMath.max(
+                              token.value.frozen - token.value.reserved,
+                              0n,
+                            ),
+                        ),
+                        token.metadata.decimals,
+                      ).toLocaleString() +
+                        " " +
+                        symbol}
+                    </td>
+                    <td
+                      className={css({
+                        textAlign: "right",
+                        padding: "1rem",
+                      })}
+                    >
+                      {new DenominatedNumber(
+                        BigIntMath.max(
+                          0n,
+                          token.value.free + token.value.reserved,
+                        ),
+                        token.metadata.decimals,
+                      ).toLocaleString() +
+                        " " +
+                        symbol}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
@@ -498,6 +538,9 @@ function TransferAssetsDialog({
                 token.value.free -
                   BigIntMath.max(token.value.frozen - token.value.reserved, 0n),
               );
+              
+              const symbol = token.metadata.symbol.asText();
+              const iconPath = getTokenIcon(symbol);
 
               return (
                 <button
@@ -520,7 +563,24 @@ function TransferAssetsDialog({
                     },
                   })}
                 >
-                  <span>{token.metadata.symbol.asText()}</span>
+                  <div className={css({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                  })}>
+                    {iconPath && (
+                      <img 
+                        src={iconPath} 
+                        alt={`${symbol} icon`} 
+                        className={css({
+                          width: "1.5rem",
+                          height: "1.5rem",
+                          objectFit: "contain",
+                        })} 
+                      />
+                    )}
+                    <span>{symbol}</span>
+                  </div>
                   <span>
                     {new DenominatedNumber(
                       transferable,
@@ -569,8 +629,11 @@ function TransferDialog({
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const { showNotification } = useNotification();
+  
+  // Get the icon for the token
+  const iconPath = getTokenIcon(symbol);
 
-  const [transferState, transfer] = useMutation((tx) => {
+  const [_transferState, transfer] = useMutation((tx) => {
     // Convert amount to proper decimals
     const rawAmount = BigInt(
       Math.floor(parseFloat(amount) * Math.pow(10, decimals)),
@@ -652,7 +715,26 @@ function TransferDialog({
 
   return (
     <ModalDialog
-      title={`Transfer ${symbol}`}
+      title={
+        <div className={css({
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+        })}>
+          {iconPath && (
+            <img 
+              src={iconPath} 
+              alt={`${symbol} icon`} 
+              className={css({
+                width: "1.5rem",
+                height: "1.5rem",
+                objectFit: "contain",
+              })} 
+            />
+          )}
+          <span>Transfer {symbol}</span>
+        </div>
+      }
       onClose={onClose}
       className={css({
         containerType: "inline-size",
@@ -679,7 +761,26 @@ function TransferDialog({
           placeholder="Enter recipient address"
         />
         <TextInput
-          label={`Amount (${symbol})`}
+          label={
+            <div className={css({
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            })}>
+              {iconPath && (
+                <img 
+                  src={iconPath} 
+                  alt={`${symbol} icon`} 
+                  className={css({
+                    width: "1rem",
+                    height: "1rem",
+                    objectFit: "contain",
+                  })} 
+                />
+              )}
+              <span>Amount ({symbol})</span>
+            </div>
+          }
           value={amount}
           onChangeValue={(value) => {
             // Allow decimal points and numbers
@@ -690,15 +791,15 @@ function TransferDialog({
           }}
           placeholder={`Enter amount in ${symbol}`}
         />
+
         <Button
           type="submit"
-          disabled={transferState === pending || isProcessing}
+          disabled={!address || !amount || isProcessing}
           className={css({
             marginTop: "1rem",
-            width: "stretch",
           })}
         >
-          Transfer
+          {isProcessing ? "Processing..." : "Transfer"}
         </Button>
       </form>
     </ModalDialog>
