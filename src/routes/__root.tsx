@@ -2,13 +2,16 @@
 import { css, cx } from "../../styled-system/css";
 import { Button } from "../components/button";
 import { CircularProgressIndicator } from "../components/circular-progress-indicator";
+import { ModalDialog } from "../components/modal-dialog";
 import { Select } from "../components/select";
 import { config } from "../config";
+import { useNotification } from "../contexts/notification-context";
 import {
   accountsAtom,
   selectedAccountAtom,
   selectedAccountIdAtom,
 } from "../features/accounts/store";
+import { CreateDaoDialog } from "../features/daos/components/create-dao-dialog";
 import {
   useLazyLoadSelectedDaoId,
   useSetSelectedDaoId,
@@ -20,8 +23,7 @@ import {
   ReactiveDotProvider,
   SignerProvider,
   useAccounts,
-  useConnectedWallets,
-  // useLazyLoadQuery,
+  useConnectedWallets, // useLazyLoadQuery,
   useLazyLoadQueryWithRefresh,
 } from "@reactive-dot/react";
 import {
@@ -38,9 +40,6 @@ import { PolkadotIdenticon } from "dot-identicon/react.js";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Menu, X, CopyIcon, ExternalLink } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
-import { CreateDaoDialog } from "../features/daos/components/create-dao-dialog";
-import { useNotification } from "../contexts/notification-context";
-import { ModalDialog } from "../components/modal-dialog";
 
 registerDotConnect({ wallets: config.wallets ?? [] });
 
@@ -49,20 +48,22 @@ export const Route = createRootRouteWithContext<{
 }>()({
   component: Root,
   errorComponent: ({ error }) => (
-    <div className={css({
-      padding: "2rem",
-      color: "error",
-      display: "flex",
-      flexDirection: "column",
-      gap: "1rem",
-      alignItems: "center",
-      justifyContent: "center",
-      minHeight: "100dvh"
-    })}>
+    <div
+      className={css({
+        padding: "2rem",
+        color: "error",
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100dvh",
+      })}
+    >
       <h1>Something went wrong!</h1>
       <pre>{error instanceof Error ? error.message : String(error)}</pre>
     </div>
-  )
+  ),
 });
 
 const sideBarOpenAtom = atom(false);
@@ -224,14 +225,14 @@ function Navigation({ className }: NavigationProps) {
             target="_blank"
             rel="noopener noreferrer"
             className={css({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              color: 'inherit',
-              textDecoration: 'none',
-              '&:hover': {
-                color: 'primary'
-              }
+              display: "flex",
+              alignItems: "center",
+              gap: "0.25rem",
+              color: "inherit",
+              textDecoration: "none",
+              "&:hover": {
+                color: "primary",
+              },
             })}
           >
             Staking
@@ -244,14 +245,14 @@ function Navigation({ className }: NavigationProps) {
             target="_blank"
             rel="noopener noreferrer"
             className={css({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              color: 'inherit',
-              textDecoration: 'none',
-              '&:hover': {
-                color: 'primary'
-              }
+              display: "flex",
+              alignItems: "center",
+              gap: "0.25rem",
+              color: "inherit",
+              textDecoration: "none",
+              "&:hover": {
+                color: "primary",
+              },
             })}
           >
             Roadmap
@@ -264,14 +265,14 @@ function Navigation({ className }: NavigationProps) {
             target="_blank"
             rel="noopener noreferrer"
             className={css({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              color: 'inherit',
-              textDecoration: 'none',
-              '&:hover': {
-                color: 'primary'
-              }
+              display: "flex",
+              alignItems: "center",
+              gap: "0.25rem",
+              color: "inherit",
+              textDecoration: "none",
+              "&:hover": {
+                color: "primary",
+              },
             })}
           >
             Docs
@@ -298,7 +299,7 @@ type TopBarProps = { className?: string };
 function TopBar({ className }: TopBarProps) {
   const matches = useRouterState({ select: (s) => s.matches });
   const location = useLocation();
-  const isDaoRoute = location.pathname.startsWith('/daos');
+  const isDaoRoute = location.pathname.startsWith("/daos");
 
   const title = matches.at(-1)?.context.title;
 
@@ -320,17 +321,19 @@ function TopBar({ className }: TopBarProps) {
         className,
       )}
     >
-      <h1 className={css({
-        textStyle: "bodyLarge",
-        fontWeight: "bold",
-        maxWidth: "calc(100% - 160px)", // Account for the account selector and connection button
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        "@media(max-width: 48rem)": {
-          display: "none", // Hide title completely on mobile
-        }
-      })}>
+      <h1
+        className={css({
+          textStyle: "bodyLarge",
+          fontWeight: "bold",
+          maxWidth: "calc(100% - 160px)", // Account for the account selector and connection button
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          "@media(max-width: 48rem)": {
+            display: "none", // Hide title completely on mobile
+          },
+        })}
+      >
         {title}
       </h1>
       <div
@@ -416,19 +419,23 @@ function AccountSelectDialog({ onClose }: { onClose: () => void }) {
         width: `min(18rem, 100dvw)`,
       })}
     >
-      <div className={css({
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1rem'
-      })}>
-        <p className={css({ color: 'content.muted' })}>
+      <div
+        className={css({
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+        })}
+      >
+        <p className={css({ color: "content.muted" })}>
           Please select an account
         </p>
-        <div className={css({
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.5rem'
-        })}>
+        <div
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+          })}
+        >
           {accounts.map((account) => (
             <Button
               key={account.wallet.id + account.address}
@@ -437,23 +444,23 @@ function AccountSelectDialog({ onClose }: { onClose: () => void }) {
                 onClose();
               }}
               className={css({
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                padding: '0.75rem',
-                width: '100%',
-                backgroundColor: 'surface',
-                '&:hover': { backgroundColor: 'surfaceHover' }
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                padding: "0.75rem",
+                width: "100%",
+                backgroundColor: "surface",
+                "&:hover": { backgroundColor: "surfaceHover" },
               })}
             >
               <PolkadotIdenticon address={account.address} size={24} />
               <span
                 className={css({
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  lineHeight: '24px',
-                  paddingLeft: '0.5rem',
-                  transform: 'translateY(-6px)',
+                  display: "inline-flex",
+                  alignItems: "center",
+                  lineHeight: "24px",
+                  paddingLeft: "0.5rem",
+                  transform: "translateY(-6px)",
                 })}
               >
                 {account.name ?? account.address}
@@ -533,7 +540,7 @@ function SideBar({ className, onCreateDao }: SideBarProps) {
             margin: "1rem",
             width: "stretch",
             opacity: selectedAccount ? 1 : 0.5,
-            cursor: selectedAccount ? 'pointer' : 'not-allowed',
+            cursor: selectedAccount ? "pointer" : "not-allowed",
           })}
         >
           Create DAO
@@ -556,7 +563,7 @@ function SuspendableDaos() {
 
   function _SuspendableDaos() {
     const [daoIds, refreshDaoIds] = useLazyLoadQueryWithRefresh((builder) =>
-      builder.readStorageEntries("CoreAssets", "Accounts", [account!.address])
+      builder.readStorageEntries("CoreAssets", "Accounts", [account!.address]),
     );
 
     const [daos, refreshDaos] = useLazyLoadQueryWithRefresh((builder) =>
@@ -569,10 +576,7 @@ function SuspendableDaos() {
 
     useEffect(() => {
       window.refreshDaoList = async () => {
-        await Promise.all([
-          refreshDaoIds(),
-          refreshDaos()
-        ]);
+        await Promise.all([refreshDaoIds(), refreshDaos()]);
       };
       return () => {
         window.refreshDaoList = undefined;
@@ -609,8 +613,11 @@ function SuspendableDaos() {
               maxWidth: "100%",
               overflow: "hidden",
               "@media(width < 48rem)": {
-                outline: dao.id === selectedDaoId ? "2px solid {colors.primary}" : undefined,
-              }
+                outline:
+                  dao.id === selectedDaoId
+                    ? "2px solid {colors.primary}"
+                    : undefined,
+              },
             })}
           >
             <button
@@ -620,7 +627,7 @@ function SuspendableDaos() {
                 cursor: "pointer",
                 textAlign: "start",
                 maxWidth: "calc(100% - 35px)", // Account for the copy button
-                overflow: "hidden"
+                overflow: "hidden",
               })}
             >
               <AccountListItem

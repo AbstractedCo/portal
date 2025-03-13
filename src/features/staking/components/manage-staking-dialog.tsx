@@ -75,10 +75,7 @@ export function ManageStakingDialog({
           <article>
             <header>Currently staked</header>
             <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
-              <SuspendableAccountTotalStake
-                daoId={daoId}
-                account={account!}
-              />
+              <SuspendableAccountTotalStake daoId={daoId} account={account!} />
             </Suspense>
           </article>
         </div>
@@ -178,8 +175,8 @@ export function ManageStakingDialog({
       sourceBalance === "available"
         ? spendableBalance
         : nativeTokenAmountFromPlanck(
-          coreStakes.find((stake) => stake.core.id === sourceBalance)!.staked,
-        );
+            coreStakes.find((stake) => stake.core.id === sourceBalance)!.staked,
+          );
 
     const [amount, setAmount] = useState("");
 
@@ -195,14 +192,14 @@ export function ManageStakingDialog({
     const [stakeState, stake] = useMutation((builder) =>
       sourceBalance === "available"
         ? builder.OcifStaking.stake({
-          dao_id: daoId,
-          value: nativeTokenAmount?.planck ?? 0n,
-        })
+            dao_id: daoId,
+            value: nativeTokenAmount?.planck ?? 0n,
+          })
         : builder.OcifStaking.move_stake({
-          from_dao: sourceBalance,
-          to_dao: daoId,
-          amount: nativeTokenAmount?.planck ?? 0n,
-        }),
+            from_dao: sourceBalance,
+            to_dao: daoId,
+            amount: nativeTokenAmount?.planck ?? 0n,
+          }),
     );
 
     const error = useMemo(() => {

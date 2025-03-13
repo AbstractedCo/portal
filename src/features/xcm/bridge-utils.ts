@@ -1,13 +1,13 @@
-import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
-import { FixedSizeBinary, type SS58String } from "polkadot-api";
 import { isAssetFromAssetHub } from "./xcm-utils";
-import { useMutation, useMutationEffect } from "@reactive-dot/react";
+import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
 import { MutationError, pending } from "@reactive-dot/core";
+import { useMutation, useMutationEffect } from "@reactive-dot/react";
+import { FixedSizeBinary, type SS58String } from "polkadot-api";
 import { useState } from "react";
 
 // Status change interface for bridge operations
 export interface BridgeStatusChange {
-  status: 'pending' | 'success' | 'error';
+  status: "pending" | "success" | "error";
   message: string;
   details?: unknown;
 }
@@ -44,33 +44,41 @@ export type SupportedBridgeChain = "polkadot_asset_hub";
 
 // Function to check if location is a native token (like DOT)
 // Native tokens have a single "Here" junction
-export function isNativeToken(location: XcmVersionedLocation | undefined): boolean {
+export function isNativeToken(
+  location: XcmVersionedLocation | undefined,
+): boolean {
   if (!location) return false;
 
   return (
-    location.type === "V3" || location.type === "V4"
-  ) && location.value.interior.type === "Here";
+    (location.type === "V3" || location.type === "V4") &&
+    location.value.interior.type === "Here"
+  );
 }
 
 // Helper to create asset reference based on asset location structure
-export function createAssetReference(location: XcmVersionedLocation | undefined, assetId: bigint): {
+export function createAssetReference(
+  location: XcmVersionedLocation | undefined,
+  assetId: bigint,
+): {
   parents: number;
-  interior: {
-    type: "Here";
-    value: undefined
-  } | {
-    type: "X2";
-    value: [
-      {
-        type: "PalletInstance";
-        value: number;
-      },
-      {
-        type: "GeneralIndex";
-        value: bigint;
+  interior:
+    | {
+        type: "Here";
+        value: undefined;
       }
-    ]
-  }
+    | {
+        type: "X2";
+        value: [
+          {
+            type: "PalletInstance";
+            value: number;
+          },
+          {
+            type: "GeneralIndex";
+            value: bigint;
+          },
+        ];
+      };
 } {
   // Case for native tokens (like DOT)
   if (isNativeToken(location)) {
@@ -78,8 +86,8 @@ export function createAssetReference(location: XcmVersionedLocation | undefined,
       parents: 1,
       interior: {
         type: "Here" as const,
-        value: undefined
-      }
+        value: undefined,
+      },
     };
   }
 
@@ -91,95 +99,105 @@ export function createAssetReference(location: XcmVersionedLocation | undefined,
       value: [
         {
           type: "PalletInstance" as const,
-          value: 50 // Assets pallet
+          value: 50, // Assets pallet
         },
         {
           type: "GeneralIndex" as const,
-          value: assetId
-        }
-      ]
-    }
+          value: assetId,
+        },
+      ],
+    },
   };
 }
 
 // Custom hook for bridging assets into InvArch from Asset Hub
 export function useAssetHubBridgeInOperation(params?: BridgeParams) {
-  const { beneficiaryAccount, assetLocation, assetId, amount, onStatusChange, onComplete } = params || {};
+  const {
+    beneficiaryAccount,
+    assetLocation,
+    assetId,
+    amount,
+    onStatusChange,
+    onComplete,
+  } = params || {};
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Set up the mutation
-  const [_, execute] = useMutation((builder) => {
-    if (!beneficiaryAccount || !amount) {
-      throw new Error("Missing required parameters for bridge operation");
-    }
-
-    // For non-native tokens we need an assetId
-    if (!isNativeToken(assetLocation) && !assetId) {
-      throw new Error("Asset ID is required for non-native tokens");
-    }
-
-    // Create the appropriate asset reference based on asset type
-    const assetReference = createAssetReference(assetLocation, assetId || 0n);
-
-    return builder.PolkadotXcm.limited_reserve_transfer_assets({
-      dest: {
-        type: "V4",
-        value: {
-          parents: 1,
-          interior: {
-            type: "X1",
-            value: {
-              type: "Parachain",
-              value: 3340 // InvArch parachain ID
-            }
-          }
-        }
-      },
-      beneficiary: {
-        type: "V4",
-        value: {
-          parents: 0,
-          interior: {
-            type: "X1",
-            value: {
-              type: "AccountId32",
-              value: {
-                network: undefined,
-                id: FixedSizeBinary.fromAccountId32(beneficiaryAccount)
-              }
-            }
-          }
-        }
-      },
-      assets: {
-        type: "V4",
-        value: [
-          {
-            id: assetReference,
-            fun: {
-              type: "Fungible",
-              value: amount
-            }
-          }
-        ]
-      },
-      fee_asset_item: 0,
-      weight_limit: {
-        type: "Unlimited",
-        value: undefined
+  const [_, execute] = useMutation(
+    (builder) => {
+      if (!beneficiaryAccount || !amount) {
+        throw new Error("Missing required parameters for bridge operation");
       }
-    });
-  }, { chainId: "polkadot_asset_hub" });
+
+      // For non-native tokens we need an assetId
+      if (!isNativeToken(assetLocation) && !assetId) {
+        throw new Error("Asset ID is required for non-native tokens");
+      }
+
+      // Create the appropriate asset reference based on asset type
+      const assetReference = createAssetReference(assetLocation, assetId || 0n);
+
+      return builder.PolkadotXcm.limited_reserve_transfer_assets({
+        dest: {
+          type: "V4",
+          value: {
+            parents: 1,
+            interior: {
+              type: "X1",
+              value: {
+                type: "Parachain",
+                value: 3340, // InvArch parachain ID
+              },
+            },
+          },
+        },
+        beneficiary: {
+          type: "V4",
+          value: {
+            parents: 0,
+            interior: {
+              type: "X1",
+              value: {
+                type: "AccountId32",
+                value: {
+                  network: undefined,
+                  id: FixedSizeBinary.fromAccountId32(beneficiaryAccount),
+                },
+              },
+            },
+          },
+        },
+        assets: {
+          type: "V4",
+          value: [
+            {
+              id: assetReference,
+              fun: {
+                type: "Fungible",
+                value: amount,
+              },
+            },
+          ],
+        },
+        fee_asset_item: 0,
+        weight_limit: {
+          type: "Unlimited",
+          value: undefined,
+        },
+      });
+    },
+    { chainId: "polkadot_asset_hub" },
+  );
 
   // Handle mutation events and status changes
   useMutationEffect((event) => {
     if (event.value === pending) {
       setIsProcessing(true);
       onStatusChange?.({
-        status: 'pending',
-        message: "Submitting bridge transaction..."
+        status: "pending",
+        message: "Submitting bridge transaction...",
       });
       return;
     }
@@ -187,9 +205,9 @@ export function useAssetHubBridgeInOperation(params?: BridgeParams) {
     if (event.value instanceof MutationError) {
       setIsProcessing(false);
       onStatusChange?.({
-        status: 'error',
+        status: "error",
         message: "Failed to submit bridge transaction",
-        details: event.value
+        details: event.value,
       });
       return;
     }
@@ -199,24 +217,24 @@ export function useAssetHubBridgeInOperation(params?: BridgeParams) {
         setIsProcessing(false);
         if (event.value.ok) {
           onStatusChange?.({
-            status: 'success',
+            status: "success",
             message: "Bridge transaction was successful!",
-            details: event.value
+            details: event.value,
           });
           onComplete?.();
         } else {
           onStatusChange?.({
-            status: 'error',
+            status: "error",
             message: "Transaction failed",
-            details: event.value
+            details: event.value,
           });
         }
         break;
       default:
         onStatusChange?.({
-          status: 'pending',
+          status: "pending",
           message: "Transaction pending...",
-          details: event.value
+          details: event.value,
         });
     }
   });
@@ -237,7 +255,11 @@ export function useAssetHubBridgeInOperation(params?: BridgeParams) {
   };
 
   // Validation function based on location structure
-  const validateBridge = ({ location, amount, account }: BridgeValidationParams) => {
+  const validateBridge = ({
+    location,
+    amount,
+    account,
+  }: BridgeValidationParams) => {
     if (!amount || !account) return false;
 
     // If we have a location, check if it's from Asset Hub or is a native token
@@ -256,78 +278,90 @@ export function useAssetHubBridgeInOperation(params?: BridgeParams) {
     isLocationSupported: (location: XcmVersionedLocation | undefined) => {
       if (!location) return false;
       return isAssetFromAssetHub(location) || isNativeToken(location);
-    }
+    },
   };
 }
 
 // Custom hook for bridging assets out from InvArch to Asset Hub
-export function useInvArchBridgeOutOperation(params?: BridgeOutParams & { daoId?: number }) {
-  const { destinationAccount, assetId, amount, onStatusChange, onComplete, daoId } = params || {};
+export function useInvArchBridgeOutOperation(
+  params?: BridgeOutParams & { daoId?: number },
+) {
+  const {
+    destinationAccount,
+    assetId,
+    amount,
+    onStatusChange,
+    onComplete,
+    daoId,
+  } = params || {};
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Set up the mutation for xTokens.transfer through the DAO's multisig
-  const [_, execute] = useMutation((builder) => {
-    if (!destinationAccount || !amount || !assetId || daoId === undefined) {
-      throw new Error("Missing required parameters for bridge out operation");
-    }
-
-    // Create the xTokens.transfer call that will be executed by the DAO
-    const xTokensTransferCall = builder.XTokens.transfer({
-      // Currency ID for the token to transfer (ForeignAsset for Asset Hub assets)
-      currency_id: Number(assetId),
-
-      // Amount to transfer
-      amount,
-
-      // Destination chain and account
-      dest: {
-        type: "V4",
-        value: {
-          parents: 1, // Parent (Relay chain)
-          interior: {
-            type: "X2",
-            value: [
-              {
-                type: "Parachain",
-                value: 1000 // Asset Hub parachain ID
-              },
-              {
-                type: "AccountId32",
-                value: {
-                  network: undefined,
-                  id: FixedSizeBinary.fromAccountId32(destinationAccount)
-                }
-              }
-            ]
-          }
-        }
-      },
-
-      // Weight limit for the destination chain execution
-      dest_weight_limit: {
-        type: "Unlimited",
-        value: undefined
+  const [_, execute] = useMutation(
+    (builder) => {
+      if (!destinationAccount || !amount || !assetId || daoId === undefined) {
+        throw new Error("Missing required parameters for bridge out operation");
       }
-    });
 
-    // Execute the transfer through the DAO's multisig operation
-    return builder.INV4.operate_multisig({
-      dao_id: daoId,
-      call: xTokensTransferCall.decodedCall,
-      fee_asset: { type: "Native", value: undefined },
-      metadata: undefined,
-    });
-  }, { chainId: "invarch" });
+      // Create the xTokens.transfer call that will be executed by the DAO
+      const xTokensTransferCall = builder.XTokens.transfer({
+        // Currency ID for the token to transfer (ForeignAsset for Asset Hub assets)
+        currency_id: Number(assetId),
+
+        // Amount to transfer
+        amount,
+
+        // Destination chain and account
+        dest: {
+          type: "V4",
+          value: {
+            parents: 1, // Parent (Relay chain)
+            interior: {
+              type: "X2",
+              value: [
+                {
+                  type: "Parachain",
+                  value: 1000, // Asset Hub parachain ID
+                },
+                {
+                  type: "AccountId32",
+                  value: {
+                    network: undefined,
+                    id: FixedSizeBinary.fromAccountId32(destinationAccount),
+                  },
+                },
+              ],
+            },
+          },
+        },
+
+        // Weight limit for the destination chain execution
+        dest_weight_limit: {
+          type: "Unlimited",
+          value: undefined,
+        },
+      });
+
+      // Execute the transfer through the DAO's multisig operation
+      return builder.INV4.operate_multisig({
+        dao_id: daoId,
+        call: xTokensTransferCall.decodedCall,
+        fee_asset: { type: "Native", value: undefined },
+        metadata: undefined,
+      });
+    },
+    { chainId: "invarch" },
+  );
 
   // Handle mutation events and status changes
   useMutationEffect((event) => {
     if (event.value === pending) {
       setIsProcessing(true);
       onStatusChange?.({
-        status: 'pending',
-        message: "Submitting bridge out transaction..."
+        status: "pending",
+        message: "Submitting bridge out transaction...",
       });
       return;
     }
@@ -335,9 +369,9 @@ export function useInvArchBridgeOutOperation(params?: BridgeOutParams & { daoId?
     if (event.value instanceof MutationError) {
       setIsProcessing(false);
       onStatusChange?.({
-        status: 'error',
+        status: "error",
         message: "Failed to submit bridge out transaction",
-        details: event.value
+        details: event.value,
       });
       return;
     }
@@ -347,24 +381,24 @@ export function useInvArchBridgeOutOperation(params?: BridgeOutParams & { daoId?
         setIsProcessing(false);
         if (event.value.ok) {
           onStatusChange?.({
-            status: 'success',
+            status: "success",
             message: "Bridge out transaction was successful!",
-            details: event.value
+            details: event.value,
           });
           onComplete?.();
         } else {
           onStatusChange?.({
-            status: 'error',
+            status: "error",
             message: "Transaction failed",
-            details: event.value
+            details: event.value,
           });
         }
         break;
       default:
         onStatusChange?.({
-          status: 'pending',
+          status: "pending",
           message: "Transaction pending...",
-          details: event.value
+          details: event.value,
         });
     }
   });
@@ -393,12 +427,14 @@ export function useInvArchBridgeOutOperation(params?: BridgeOutParams & { daoId?
     isLocationSupported: (_location: XcmVersionedLocation | undefined) => {
       // For now, assume all assets in InvArch can be bridged out to Asset Hub
       return true;
-    }
+    },
   };
 }
 
 // Helper function to check if a location is supported by any bridge implementation
-export function isBridgeSupportedIn(location: XcmVersionedLocation | undefined): boolean {
+export function isBridgeSupportedIn(
+  location: XcmVersionedLocation | undefined,
+): boolean {
   if (!location) return false;
 
   // Support native tokens (like DOT)
@@ -419,7 +455,9 @@ export function isBridgeSupportedOut(assetId: number): boolean {
 }
 
 // Helper function to get the chain ID for a given location
-export function getBridgeSourceChain(location: XcmVersionedLocation | undefined): SupportedBridgeChain | undefined {
+export function getBridgeSourceChain(
+  location: XcmVersionedLocation | undefined,
+): SupportedBridgeChain | undefined {
   if (!location) return undefined;
 
   // Both native tokens and other Asset Hub assets come from polkadot_asset_hub
@@ -428,4 +466,4 @@ export function getBridgeSourceChain(location: XcmVersionedLocation | undefined)
   }
 
   return undefined;
-} 
+}

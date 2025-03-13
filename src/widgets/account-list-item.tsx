@@ -1,10 +1,10 @@
+import { css } from "../../styled-system/css";
 import { ListItem } from "../components/list-item";
 import type { IdentityData } from "@polkadot-api/descriptors";
 import { idle } from "@reactive-dot/core";
 import { useLazyLoadQuery } from "@reactive-dot/react";
 import { PolkadotIdenticon } from "dot-identicon/react.js";
 import { Suspense } from "react";
-import { css } from "../../styled-system/css";
 
 export type AccountListItemProps = {
   address: string;
@@ -15,42 +15,52 @@ export function AccountListItem({ address, name }: AccountListItemProps) {
   const shortenedAddress = address.slice(0, 4) + "..." + address.slice(-4);
 
   return (
-    <div className={css({
-      maxWidth: "100%",
-      overflow: "hidden"
-    })}>
+    <div
+      className={css({
+        maxWidth: "100%",
+        overflow: "hidden",
+      })}
+    >
       <ListItem
         headline={
-          <Suspense fallback={
-            <span className={css({
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              display: "block",
-              maxWidth: "100%"
-            })}>
-              {name ?? shortenedAddress}
-            </span>
-          }>
-            <span className={css({
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              display: "block",
-              maxWidth: "100%"
-            })}>
+          <Suspense
+            fallback={
+              <span
+                className={css({
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  display: "block",
+                  maxWidth: "100%",
+                })}
+              >
+                {name ?? shortenedAddress}
+              </span>
+            }
+          >
+            <span
+              className={css({
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "block",
+                maxWidth: "100%",
+              })}
+            >
               <OnChainName />
             </span>
           </Suspense>
         }
         supporting={
-          <span className={css({
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            display: "block",
-            maxWidth: "100%"
-          })}>
+          <span
+            className={css({
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              display: "block",
+              maxWidth: "100%",
+            })}
+          >
             {shortenedAddress}
           </span>
         }
@@ -103,9 +113,9 @@ export function AccountListItem({ address, name }: AccountListItemProps) {
     const identityDisplay =
       getDisplay(identity?.[0]?.info.display) ??
       (superIdentity === idle ||
-        superIdentity === undefined ||
-        superAccountIdentity === idle ||
-        superAccountIdentity === undefined
+      superIdentity === undefined ||
+      superAccountIdentity === idle ||
+      superAccountIdentity === undefined
         ? undefined
         : `${getDisplay(superAccountIdentity[0].info.display)}/${getDisplay(superIdentity[1])}`);
 

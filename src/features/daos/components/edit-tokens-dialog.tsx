@@ -1,7 +1,7 @@
-import { ModalDialog } from "../../../components/modal-dialog";
-import { Button } from "../../../components/button";
-import { TextInput } from "../../../components/text-input";
 import { css } from "../../../../styled-system/css";
+import { Button } from "../../../components/button";
+import { ModalDialog } from "../../../components/modal-dialog";
+import { TextInput } from "../../../components/text-input";
 import { useState } from "react";
 
 interface EditTokensDialogProps {
@@ -27,8 +27,14 @@ export function EditTokensDialog({
   const difference = newAmount ? BigInt(newAmount) - currentBalance : 0n;
   const futureTotalTokens = currentTotalTokens + difference;
   const futureBalance = newAmount ? BigInt(newAmount) : currentBalance;
-  const futurePercentage = futureTotalTokens === 0n ? 0 : Number((futureBalance * 10000n) / futureTotalTokens) / 100;
-  const currentPercentage = currentTotalTokens === 0n ? 0 : Number((currentBalance * 10000n) / currentTotalTokens) / 100;
+  const futurePercentage =
+    futureTotalTokens === 0n
+      ? 0
+      : Number((futureBalance * 10000n) / futureTotalTokens) / 100;
+  const currentPercentage =
+    currentTotalTokens === 0n
+      ? 0
+      : Number((currentBalance * 10000n) / currentTotalTokens) / 100;
 
   const isDecrease = difference < 0n;
   const hasChanges = newAmount && BigInt(newAmount) !== currentBalance;
@@ -50,75 +56,102 @@ export function EditTokensDialog({
           }}
           disabled={!hasChanges || isSubmitting}
           className={css({
-            backgroundColor: isDecrease ? 'error' : 'primary',
-            color: isDecrease ? 'on-error' : 'on-primary',
+            backgroundColor: isDecrease ? "error" : "primary",
+            color: isDecrease ? "on-error" : "on-primary",
             width: "stretch",
             opacity: isSubmitting ? 0.5 : 1,
-            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            cursor: isSubmitting ? "not-allowed" : "pointer",
           })}
         >
-          {isSubmitting ? 'Processing...' : (isDecrease ? 'Burn Tokens' : 'Mint Tokens')}
+          {isSubmitting
+            ? "Processing..."
+            : isDecrease
+              ? "Burn Tokens"
+              : "Mint Tokens"}
         </Button>
       }
     >
-      <div className={css({
-        display: 'flex',
-        flexDirection: 'column',
+      <div
+        className={css({
+          display: "flex",
+          flexDirection: "column",
 
-        minWidth: '400px',
-      })}>
+          minWidth: "400px",
+        })}
+      >
         <div>
           <TextInput
             label={`New Token Amount for Address: ${address}`}
             value={newAmount}
             className={css({
-              width: '100%',
+              width: "100%",
             })}
             onChangeValue={(value) => {
-              if (value === "" || (/^\d+$/.test(value) && BigInt(value) <= (2n ** 128n - 1n))) {
+              if (
+                value === "" ||
+                (/^\d+$/.test(value) && BigInt(value) <= 2n ** 128n - 1n)
+              ) {
                 setNewAmount(value);
               }
             }}
             placeholder={currentBalance.toString()}
           />
-          <div className={css({
-            marginTop: '0.1rem',
-            fontSize: '0.875rem',
-            color: 'content.muted',
-            display: 'flex',
-            alignItems: 'center',
-          })}>
+          <div
+            className={css({
+              marginTop: "0.1rem",
+              fontSize: "0.875rem",
+              color: "content.muted",
+              display: "flex",
+              alignItems: "center",
+            })}
+          >
             <span>Current Balance:&#160;</span>
-            <span>{currentBalance.toString()} tokens ({currentPercentage.toFixed(2)}% voting strength)</span>
+            <span>
+              {currentBalance.toString()} tokens ({currentPercentage.toFixed(2)}
+              % voting strength)
+            </span>
           </div>
         </div>
 
         {hasChanges && (
-          <div className={css({
-            backgroundColor: isDecrease ? 'error.container' : 'primary.container',
-            paddingTop: '1.5rem',
-            fontSize: '0.875rem',
-            textAlign: 'center',
-          })}>
-            <p className={css({
-              fontWeight: 'medium',
-              color: isDecrease ? 'error' : 'success',
-            })}>
-              This will {isDecrease ? 'burn' : 'mint'} {Math.abs(Number(difference))} tokens
+          <div
+            className={css({
+              backgroundColor: isDecrease
+                ? "error.container"
+                : "primary.container",
+              paddingTop: "1.5rem",
+              fontSize: "0.875rem",
+              textAlign: "center",
+            })}
+          >
+            <p
+              className={css({
+                fontWeight: "medium",
+                color: isDecrease ? "error" : "success",
+              })}
+            >
+              This will {isDecrease ? "burn" : "mint"}{" "}
+              {Math.abs(Number(difference))} tokens
             </p>
-            <div className={css({
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.25rem',
-            })}>
+            <div
+              className={css({
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+              })}
+            >
               <p>
-                New voting strength: <strong>{futurePercentage.toFixed(2)}%</strong>
+                New voting strength:{" "}
+                <strong>{futurePercentage.toFixed(2)}%</strong>
               </p>
-              <p className={css({
-                color: 'content.muted',
-                fontSize: '0.75rem',
-              })}>
-                Based on future total supply of {futureTotalTokens.toString()} tokens
+              <p
+                className={css({
+                  color: "content.muted",
+                  fontSize: "0.75rem",
+                })}
+              >
+                Based on future total supply of {futureTotalTokens.toString()}{" "}
+                tokens
               </p>
             </div>
           </div>
@@ -126,4 +159,4 @@ export function EditTokensDialog({
       </div>
     </ModalDialog>
   );
-} 
+}

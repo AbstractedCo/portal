@@ -1,20 +1,23 @@
 import { css } from "../../../styled-system/css";
+import { CircularProgressIndicator } from "../../components/circular-progress-indicator";
+import { Select } from "../../components/select";
 import { Tabs } from "../../components/tabs";
+import {
+  useAccountBalance,
+  useDaoBalance,
+} from "../../features/accounts/store";
+import { selectedAccountIdAtom } from "../../features/accounts/store";
+import { useAccounts } from "@reactive-dot/react";
+import { DenominatedNumber } from "@reactive-dot/utils";
 import {
   createFileRoute,
   Link,
   Outlet,
   useLocation,
 } from "@tanstack/react-router";
-import { DenominatedNumber } from "@reactive-dot/utils";
-import { useAccountBalance, useDaoBalance } from "../../features/accounts/store";
 import { ConnectionButton } from "dot-connect/react.js";
-import { Select } from "../../components/select";
-import { useAtom } from "jotai";
-import { selectedAccountIdAtom } from "../../features/accounts/store";
-import { useAccounts } from "@reactive-dot/react";
 import { PolkadotIdenticon } from "dot-identicon/react.js";
-import { CircularProgressIndicator } from "../../components/circular-progress-indicator";
+import { useAtom } from "jotai";
 import { Suspense } from "react";
 
 const DECIMALS = 12;
@@ -31,7 +34,9 @@ function Layout() {
   // Custom AccountSelect implementation for the sidebar
   function CustomAccountSelect() {
     const accounts = useAccounts();
-    const [selectedAccount, setSelectedAccount] = useAtom(selectedAccountIdAtom);
+    const [selectedAccount, setSelectedAccount] = useAtom(
+      selectedAccountIdAtom,
+    );
 
     return (
       <Suspense fallback={<CircularProgressIndicator />}>
@@ -63,7 +68,9 @@ function Layout() {
         padding: "2rem",
       })}
     >
-      <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>Personal Assets</header>
+      <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
+        Personal Assets
+      </header>
       <dl
         className={css({
           display: "grid",
@@ -98,7 +105,9 @@ function Layout() {
         padding: "2rem",
       })}
     >
-      <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>DAO Assets</header>
+      <header className={css({ fontWeight: "bold", marginBottom: "1rem" })}>
+        DAO Assets
+      </header>
       <dl
         className={css({
           display: "grid",
@@ -127,28 +136,30 @@ function Layout() {
 
   // Account selector container for desktop sidebar
   const AccountSelectorComponent = () => (
-    <div className={css({
-      display: "flex",
-      alignItems: "center",
-      gap: "0.75rem",
-      justifyContent: "center",
-      marginBottom: "0.75rem",
-      "--dc-primary-color": "var(--colors-primary)",
-      "--dc-on-primary-color": "var(--colors-on-primary)",
-      "& > div": {
-        flex: 1,
-      },
-      "& [data-part='trigger']": {
-        display: "inline-flex",
+    <div
+      className={css({
+        display: "flex",
         alignItems: "center",
-        minHeight: "3.5rem",
-        padding: "0.5rem 0.75rem",
-        "& > *": {
-          display: "flex",
+        gap: "0.75rem",
+        justifyContent: "center",
+        marginBottom: "0.75rem",
+        "--dc-primary-color": "var(--colors-primary)",
+        "--dc-on-primary-color": "var(--colors-on-primary)",
+        "& > div": {
+          flex: 1,
+        },
+        "& [data-part='trigger']": {
+          display: "inline-flex",
           alignItems: "center",
-        }
-      }
-    })}>
+          minHeight: "3.5rem",
+          padding: "0.5rem 0.75rem",
+          "& > *": {
+            display: "flex",
+            alignItems: "center",
+          },
+        },
+      })}
+    >
       <CustomAccountSelect />
       <ConnectionButton />
     </div>

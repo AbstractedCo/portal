@@ -17,7 +17,7 @@ export const Route = createFileRoute("/daos/_layout/transactions")({
 function TransactionsPage() {
   const daoId = useLazyLoadSelectedDaoId();
 
-  if (typeof daoId !== 'number') {
+  if (typeof daoId !== "number") {
     return <p>Please select or create a DAO</p>;
   }
 
@@ -65,12 +65,14 @@ function SuspendableTransactionPage({
                 value={index.toString()}
                 summary={
                   <Suspense fallback={<CircularProgressIndicator size="1lh" />}>
-                    <div className={css({
-                      maxWidth: "100%",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    })}>
+                    <div
+                      className={css({
+                        maxWidth: "100%",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      })}
+                    >
                       <SuspendableSummary />
                     </div>
                   </Suspense>

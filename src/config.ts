@@ -1,4 +1,8 @@
-import { polkadot_people, invarch, polkadot_asset_hub } from "@polkadot-api/descriptors";
+import {
+  polkadot_people,
+  invarch,
+  polkadot_asset_hub,
+} from "@polkadot-api/descriptors";
 import { defineConfig } from "@reactive-dot/core";
 import { InjectedWalletProvider } from "@reactive-dot/core/wallets.js";
 import { withPolkadotSdkCompat } from "polkadot-api/polkadot-sdk-compat";

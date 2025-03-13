@@ -1,20 +1,20 @@
 import { css } from "../../../../styled-system/css";
-import { useLazyLoadSelectedDaoId } from "../../../features/daos/store";
-import { useLazyLoadQuery } from "@reactive-dot/react";
-import { BigIntMath, DenominatedNumber } from "@reactive-dot/utils";
-import { createFileRoute } from "@tanstack/react-router";
-import { Binary } from "polkadot-api";
 import { Button } from "../../../components/button";
 import { ModalDialog } from "../../../components/modal-dialog";
 import { TextInput } from "../../../components/text-input";
-import { useMutation, useMutationEffect } from "@reactive-dot/react";
-import { useState } from "react";
-import { useNotification } from "../../../contexts/notification-context";
-import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
-import { MutationError, pending } from "@reactive-dot/core";
-import { QRCodeSVG } from "qrcode.react";
 import { BridgeAssetsInDialog } from "../../../components/xcm-in";
 import { BridgeAssetsOutDialog } from "../../../components/xcm-out";
+import { useNotification } from "../../../contexts/notification-context";
+import { useLazyLoadSelectedDaoId } from "../../../features/daos/store";
+import { MutationError, pending } from "@reactive-dot/core";
+import { useLazyLoadQuery } from "@reactive-dot/react";
+import { useMutation, useMutationEffect } from "@reactive-dot/react";
+import { BigIntMath, DenominatedNumber } from "@reactive-dot/utils";
+import { createFileRoute } from "@tanstack/react-router";
+import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
+import { Binary } from "polkadot-api";
+import { QRCodeSVG } from "qrcode.react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/daos/_layout/assets")({
 function AssetsPage() {
   const daoId = useLazyLoadSelectedDaoId();
 
-  if (typeof daoId !== 'number') {
+  if (typeof daoId !== "number") {
     return <p>Please select or create a DAO</p>;
   }
 
@@ -49,9 +49,7 @@ function AssetsPage() {
       );
 
       const nativeBalance = useLazyLoadQuery((builder) =>
-        builder.readStorage("System", "Account", [
-          coreStorage!.account,
-        ]),
+        builder.readStorage("System", "Account", [coreStorage!.account]),
       ).data;
 
       const assetMetadata = useLazyLoadQuery((builder) =>
@@ -63,14 +61,13 @@ function AssetsPage() {
       );
 
       const tokens = coreTokens
-        .filter(token => token.keyArgs[1] !== 0)
+        .filter((token) => token.keyArgs[1] !== 0)
         .map((token, index) => {
           return {
             id: token.keyArgs[1],
             value: token.value,
             metadata: assetMetadata.at(index)!,
-          }
-
+          };
         });
 
       tokens.push({
@@ -109,35 +106,46 @@ function AssetsPage() {
         "&:disabled": {
           filter: "brightness(0.5)",
           backgroundColor: "primary",
-          cursor: "not-allowed"
+          cursor: "not-allowed",
         },
         "&:not(:disabled):hover": {
-          filter: "brightness(0.9)"
-        }
+          filter: "brightness(0.9)",
+        },
       });
 
       return (
         <>
-          <h2 className={css({
-            fontSize: "1.1rem",
-            fontWeight: "500",
-            color: "content",
-            marginBottom: "1rem"
-          })}>
+          <h2
+            className={css({
+              fontSize: "1.1rem",
+              fontWeight: "500",
+              color: "content",
+              marginBottom: "1rem",
+            })}
+          >
             Asset Actions
           </h2>
-          <div className={css({
-            display: "grid",
-            gap: "1rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            marginBottom: "2rem"
-          })}>
+          <div
+            className={css({
+              display: "grid",
+              gap: "1rem",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              marginBottom: "2rem",
+            })}
+          >
             <Button
               onClick={() => setTransferDialogOpen(true)}
               disabled={false}
               className={buttonStyle}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                }}
+              >
                 <SendIcon size={18} />
                 Transfer Assets
               </div>
@@ -147,7 +155,14 @@ function AssetsPage() {
               onClick={() => setDepositDialogOpen(true)}
               className={buttonStyle}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                }}
+              >
                 <PlusCircleIcon size={18} />
                 Deposit Assets
               </div>
@@ -158,7 +173,14 @@ function AssetsPage() {
               disabled={false}
               className={buttonStyle}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                }}
+              >
                 <ArrowLeftRight size={18} />
                 Bridge Assets In
               </div>
@@ -169,67 +191,103 @@ function AssetsPage() {
               disabled={false}
               className={buttonStyle}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                }}
+              >
                 <ArrowLeftRight size={18} />
                 Bridge Assets Out
               </div>
             </Button>
           </div>
 
-          <table className={css({
-            width: "stretch",
-            borderCollapse: "collapse",
-          })}>
+          <table
+            className={css({
+              width: "stretch",
+              borderCollapse: "collapse",
+            })}
+          >
             <thead>
               <tr>
-                <th className={css({
-                  textAlign: "left",
-                  padding: "1rem",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
-                })}>Asset</th>
-                <th className={css({
-                  textAlign: "right",
-                  padding: "1rem",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
-                })}>Transferable</th>
-                <th className={css({
-                  textAlign: "right",
-                  padding: "1rem",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)"
-                })}>Total</th>
+                <th
+                  className={css({
+                    textAlign: "left",
+                    padding: "1rem",
+                    borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                  })}
+                >
+                  Asset
+                </th>
+                <th
+                  className={css({
+                    textAlign: "right",
+                    padding: "1rem",
+                    borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                  })}
+                >
+                  Transferable
+                </th>
+                <th
+                  className={css({
+                    textAlign: "right",
+                    padding: "1rem",
+                    borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                  })}
+                >
+                  Total
+                </th>
               </tr>
             </thead>
             <tbody>
               {tokens.map((token) => (
                 <tr key={token.id}>
-                  <td className={css({
-                    textAlign: "left",
-                    padding: "1rem"
-                  })}>{token.metadata.symbol.asText()}</td>
-                  <td className={css({
-                    textAlign: "right",
-                    padding: "1rem"
-                  })}>
+                  <td
+                    className={css({
+                      textAlign: "left",
+                      padding: "1rem",
+                    })}
+                  >
+                    {token.metadata.symbol.asText()}
+                  </td>
+                  <td
+                    className={css({
+                      textAlign: "right",
+                      padding: "1rem",
+                    })}
+                  >
                     {new DenominatedNumber(
                       BigIntMath.max(
                         0n,
                         token.value.free -
-                        BigIntMath.max(
-                          token.value.frozen - token.value.reserved,
-                          0n,
-                        ),
+                          BigIntMath.max(
+                            token.value.frozen - token.value.reserved,
+                            0n,
+                          ),
                       ),
                       token.metadata.decimals,
-                    ).toLocaleString() + " " + token.metadata.symbol.asText()}
+                    ).toLocaleString() +
+                      " " +
+                      token.metadata.symbol.asText()}
                   </td>
-                  <td className={css({
-                    textAlign: "right",
-                    padding: "1rem"
-                  })}>
+                  <td
+                    className={css({
+                      textAlign: "right",
+                      padding: "1rem",
+                    })}
+                  >
                     {new DenominatedNumber(
-                      BigIntMath.max(0n, token.value.free + token.value.reserved),
+                      BigIntMath.max(
+                        0n,
+                        token.value.free + token.value.reserved,
+                      ),
                       token.metadata.decimals,
-                    ).toLocaleString() + " " + token.metadata.symbol.asText()}
+                    ).toLocaleString() +
+                      " " +
+                      token.metadata.symbol.asText()}
                   </td>
                 </tr>
               ))}
@@ -267,7 +325,7 @@ function AssetsPage() {
                   open: true,
                   tokenId: token.id,
                   symbol: token.metadata.symbol.asText(),
-                  decimals: token.metadata.decimals
+                  decimals: token.metadata.decimals,
                 });
               }}
             />
@@ -290,7 +348,7 @@ function AssetsPage() {
 
 export function DepositDialog({
   daoAddress,
-  onClose
+  onClose,
 }: {
   daoAddress: string;
   onClose: () => void;
@@ -304,51 +362,62 @@ export function DepositDialog({
         width: `min(34rem, 100dvw)`,
       })}
     >
-      <div className={css({
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "1.5rem",
-        padding: "1rem",
-      })}>
-        <div className={css({
-          backgroundColor: "white",
-          padding: "1rem",
-          borderRadius: "0.5rem",
-        })}>
-          <QRCodeSVG
-            value={daoAddress}
-            size={200}
-            level="H"
-          />
-        </div>
-
-        <div className={css({
+      <div
+        className={css({
           display: "flex",
           flexDirection: "column",
-          gap: "0.5rem",
-          width: "100%",
-          textAlign: "center",
-        })}>
-          <p className={css({
-            fontWeight: "500",
-            marginBottom: "0.5rem",
-          })}>DAO Address</p>
-          <div className={css({
-            backgroundColor: "surfaceContainer",
+          alignItems: "center",
+          gap: "1.5rem",
+          padding: "1rem",
+        })}
+      >
+        <div
+          className={css({
+            backgroundColor: "white",
             padding: "1rem",
             borderRadius: "0.5rem",
-            wordBreak: "break-all",
-            fontSize: "0.875rem",
-          })}>
+          })}
+        >
+          <QRCodeSVG value={daoAddress} size={200} level="H" />
+        </div>
+
+        <div
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+            width: "100%",
+            textAlign: "center",
+          })}
+        >
+          <p
+            className={css({
+              fontWeight: "500",
+              marginBottom: "0.5rem",
+            })}
+          >
+            DAO Address
+          </p>
+          <div
+            className={css({
+              backgroundColor: "surfaceContainer",
+              padding: "1rem",
+              borderRadius: "0.5rem",
+              wordBreak: "break-all",
+              fontSize: "0.875rem",
+            })}
+          >
             {daoAddress}
           </div>
-          <p className={css({
-            fontSize: "0.875rem",
-            color: "content.muted",
-            marginTop: "1rem",
-          })}>
-            Scan this QR code or copy the address above to deposit funds to the DAO
+          <p
+            className={css({
+              fontSize: "0.875rem",
+              color: "content.muted",
+              marginTop: "1rem",
+            })}
+          >
+            Scan this QR code or copy the address above to deposit funds to the
+            DAO
           </p>
         </div>
       </div>
@@ -356,11 +425,10 @@ export function DepositDialog({
   );
 }
 
-
 function TransferAssetsDialog({
   tokens,
   onClose,
-  onSelectToken
+  onSelectToken,
 }: {
   daoId: number;
   tokens: {
@@ -376,9 +444,11 @@ function TransferAssetsDialog({
     };
   }[];
   onClose: () => void;
-  onSelectToken: (token: typeof tokens[0]) => void;
+  onSelectToken: (token: (typeof tokens)[0]) => void;
 }) {
-  const [selectedToken, setSelectedToken] = useState<typeof tokens[0] | null>(null);
+  const [selectedToken, setSelectedToken] = useState<(typeof tokens)[0] | null>(
+    null,
+  );
 
   return (
     <ModalDialog
@@ -389,39 +459,44 @@ function TransferAssetsDialog({
         width: `min(34rem, 100dvw)`,
       })}
     >
-      <div className={css({
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.5rem"
-      })}>
-        <div className={css({
+      <div
+        className={css({
           display: "flex",
           flexDirection: "column",
-          gap: "0.5rem"
-        })}>
-          <label className={css({
-            fontSize: "0.875rem",
-            color: "content.muted"
-          })}>
+          gap: "1.5rem",
+        })}
+      >
+        <div
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+          })}
+        >
+          <label
+            className={css({
+              fontSize: "0.875rem",
+              color: "content.muted",
+            })}
+          >
             Select Asset
           </label>
-          <div className={css({
-            display: "grid",
-            gap: "0.5rem",
-            maxHeight: "200px",
-            overflowY: "auto",
-            padding: "0.5rem",
-            backgroundColor: "container",
-            borderRadius: "0.3rem"
-          })}>
+          <div
+            className={css({
+              display: "grid",
+              gap: "0.5rem",
+              maxHeight: "200px",
+              overflowY: "auto",
+              padding: "0.5rem",
+              backgroundColor: "container",
+              borderRadius: "0.3rem",
+            })}
+          >
             {tokens.map((token) => {
               const transferable = BigIntMath.max(
                 0n,
                 token.value.free -
-                BigIntMath.max(
-                  token.value.frozen - token.value.reserved,
-                  0n,
-                ),
+                  BigIntMath.max(token.value.frozen - token.value.reserved, 0n),
               );
 
               return (
@@ -433,21 +508,23 @@ function TransferAssetsDialog({
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "0.75rem",
-                    backgroundColor: selectedToken?.id === token.id ? "primary" : "surface",
-                    color: selectedToken?.id === token.id ? "onPrimary" : "content",
+                    backgroundColor:
+                      selectedToken?.id === token.id ? "primary" : "surface",
+                    color:
+                      selectedToken?.id === token.id ? "onPrimary" : "content",
                     border: "none",
                     borderRadius: "0.3rem",
                     cursor: "pointer",
                     "&:hover": {
-                      filter: "brightness(1.1)"
-                    }
+                      filter: "brightness(1.1)",
+                    },
                   })}
                 >
                   <span>{token.metadata.symbol.asText()}</span>
                   <span>
                     {new DenominatedNumber(
                       transferable,
-                      token.metadata.decimals
+                      token.metadata.decimals,
                     ).toLocaleString()}
                   </span>
                 </button>
@@ -480,7 +557,7 @@ function TransferDialog({
   tokenId,
   symbol,
   decimals,
-  onClose
+  onClose,
 }: {
   daoId: number;
   tokenId: number;
@@ -495,17 +572,19 @@ function TransferDialog({
 
   const [transferState, transfer] = useMutation((tx) => {
     // Convert amount to proper decimals
-    const rawAmount = BigInt(Math.floor(parseFloat(amount) * Math.pow(10, decimals)));
+    const rawAmount = BigInt(
+      Math.floor(parseFloat(amount) * Math.pow(10, decimals)),
+    );
 
     return tx.INV4.operate_multisig({
       dao_id: daoId,
       call: tx.Currencies.transfer({
         dest: {
           type: "Id",
-          value: address
+          value: address,
         },
         currency_id: tokenId,
-        amount: rawAmount
+        amount: rawAmount,
       }).decodedCall,
       fee_asset: { type: "Native", value: undefined },
       metadata: undefined,
@@ -564,7 +643,9 @@ function TransferDialog({
       console.error("Failed to transfer:", error);
       showNotification({
         variant: "error",
-        message: "Failed to transfer: " + (error instanceof Error ? error.message : "Unknown error"),
+        message:
+          "Failed to transfer: " +
+          (error instanceof Error ? error.message : "Unknown error"),
       });
     }
   };
@@ -588,7 +669,7 @@ function TransferDialog({
           textAlign: "center",
           "& > *": {
             width: "100%",
-          }
+          },
         })}
       >
         <TextInput

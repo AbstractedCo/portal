@@ -1,32 +1,35 @@
-import { ModalDialog } from "./modal-dialog";
-import { Button } from "./button";
-import { useState } from "react";
-import { TextInput } from "./text-input";
-import { useNotification } from "../contexts/notification-context";
 import { css } from "../../styled-system/css";
-import { useLazyLoadRegisteredAssets } from "../features/assets/store";
-import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
-import { useLazyLoadQuery } from "@reactive-dot/react";
+import { useNotification } from "../contexts/notification-context";
 import { selectedAccountAtom } from "../features/accounts/store";
-import { useAtomValue } from "jotai";
-import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
-import { DenominatedNumber } from "@reactive-dot/utils";
-import { getAssetHubId } from "../features/xcm/xcm-utils";
+import { useLazyLoadRegisteredAssets } from "../features/assets/store";
 import {
   useAssetHubBridgeInOperation,
   type BridgeStatusChange,
   isBridgeSupportedIn,
-  isNativeToken
+  isNativeToken,
 } from "../features/xcm/bridge-utils";
-import { useMutation, useMutationEffect } from "@reactive-dot/react";
+import { getAssetHubId } from "../features/xcm/xcm-utils";
+import { Button } from "./button";
+import { ModalDialog } from "./modal-dialog";
+import { TextInput } from "./text-input";
+import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
 import { MutationError, pending } from "@reactive-dot/core";
+import { useLazyLoadQuery } from "@reactive-dot/react";
+import { useMutation, useMutationEffect } from "@reactive-dot/react";
+import { DenominatedNumber } from "@reactive-dot/utils";
+import { useAtomValue } from "jotai";
+import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
+import { useState } from "react";
 
 interface BridgeAssetsInDialogProps {
   daoId: number;
   onClose: () => void;
 }
 
-export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogProps) {
+export function BridgeAssetsInDialog({
+  daoId,
+  onClose,
+}: BridgeAssetsInDialogProps) {
   const [selectedAsset, setSelectedAsset] = useState<{
     id: number;
     metadata: {
@@ -42,7 +45,9 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
 
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [step, setStep] = useState<'select-asset' | 'enter-amount' | 'review'>('select-asset');
+  const [step, setStep] = useState<"select-asset" | "enter-amount" | "review">(
+    "select-asset",
+  );
   const { showNotification } = useNotification();
   const registeredAssets = useLazyLoadRegisteredAssets();
   const selectedAccount = useAtomValue(selectedAccountAtom);
@@ -52,9 +57,11 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     builder.readStorage("INV4", "CoreStorage", [daoId]),
   );
 
-  // Query user's native VARCH balance 
+  // Query user's native VARCH balance
   const nativeBalance = useLazyLoadQuery((builder) =>
-    selectedAccount?.address ? builder.readStorage("System", "Account", [selectedAccount.address]) : null
+    selectedAccount?.address
+      ? builder.readStorage("System", "Account", [selectedAccount.address])
+      : null,
   );
 
   // Get the asset ID for the selected asset
@@ -64,9 +71,12 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     console.log("Getting asset ID for:", selectedAsset);
 
     // For native tokens like DOT, use the asset ID directly
-    if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
+    if (
+      selectedAsset.metadata.location &&
+      isNativeToken(selectedAsset.metadata.location)
+    ) {
       // Ensure the ID is a valid number before converting to BigInt
-      if (typeof selectedAsset.id === 'number' && !isNaN(selectedAsset.id)) {
+      if (typeof selectedAsset.id === "number" && !isNaN(selectedAsset.id)) {
         console.log("Converting native token ID to BigInt:", selectedAsset.id);
         return BigInt(selectedAsset.id);
       }
@@ -88,7 +98,10 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
   // Convert amount to proper decimals
   const getRawAmount = () => {
     if (!amount || !selectedAsset) {
-      console.log("Missing amount or asset for conversion:", { amount, asset: selectedAsset?.id });
+      console.log("Missing amount or asset for conversion:", {
+        amount,
+        asset: selectedAsset?.id,
+      });
       return undefined;
     }
 
@@ -132,9 +145,14 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
       if (!selectedAsset || !selectedAccount?.address) return undefined;
 
       // For native tokens like DOT
-      if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
+      if (
+        selectedAsset.metadata.location &&
+        isNativeToken(selectedAsset.metadata.location)
+      ) {
         // Use the special query for native token balance
-        return builder.readStorage("System", "Account", [selectedAccount.address]);
+        return builder.readStorage("System", "Account", [
+          selectedAccount.address,
+        ]);
       }
 
       // For other assets from Asset Hub
@@ -142,51 +160,56 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         const assetHubId = getAssetHubId(selectedAsset.metadata.location);
         if (assetHubId === undefined) return undefined;
 
-        return builder.readStorage("Assets", "Account", [Number(assetHubId), selectedAccount.address]);
+        return builder.readStorage("Assets", "Account", [
+          Number(assetHubId),
+          selectedAccount.address,
+        ]);
       }
 
       return undefined;
     },
-    { chainId: "polkadot_asset_hub" }
+    { chainId: "polkadot_asset_hub" },
   );
 
   // Function to handle status changes from the bridge
   const handleBridgeStatusChange = (status: BridgeStatusChange) => {
     // Update processing state
-    setIsProcessing(status.status === 'pending');
+    setIsProcessing(status.status === "pending");
 
     // Display appropriate notification
     showNotification({
-      variant: status.status === 'error' ? 'error' : 'success',
-      message: status.message
+      variant: status.status === "error" ? "error" : "success",
+      message: status.message,
     });
 
     // Close dialog on successful completion
-    if (status.status === 'success' && status.message.includes('successful')) {
+    if (status.status === "success" && status.message.includes("successful")) {
       onClose();
     }
   };
 
   // Set up the transfer mutation for native VARCH
-  const [_nativeTransferState, executeNativeTransfer] = useMutation((builder) => {
-    if (!coreStorage?.account || !amount || !selectedAccount?.address) {
-      throw new Error("Missing required parameters for transfer");
-    }
+  const [_nativeTransferState, executeNativeTransfer] = useMutation(
+    (builder) => {
+      if (!coreStorage?.account || !amount || !selectedAccount?.address) {
+        throw new Error("Missing required parameters for transfer");
+      }
 
-    const rawAmount = getRawAmount();
-    if (!rawAmount) {
-      throw new Error("Could not convert amount to the correct format");
-    }
+      const rawAmount = getRawAmount();
+      if (!rawAmount) {
+        throw new Error("Could not convert amount to the correct format");
+      }
 
-    // Regular transfer of native VARCH to the DAO account
-    return builder.Balances.transfer_keep_alive({
-      dest: {
-        type: "Id",
-        value: coreStorage.account
-      },
-      value: rawAmount
-    });
-  });
+      // Regular transfer of native VARCH to the DAO account
+      return builder.Balances.transfer_keep_alive({
+        dest: {
+          type: "Id",
+          value: coreStorage.account,
+        },
+        value: rawAmount,
+      });
+    },
+  );
 
   // Handle native transfer mutation events
   useMutationEffect((event) => {
@@ -194,7 +217,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
       setIsProcessing(true);
       showNotification({
         variant: "success",
-        message: "Submitting VARCH transfer..."
+        message: "Submitting VARCH transfer...",
       });
       return;
     }
@@ -203,7 +226,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
       setIsProcessing(false);
       showNotification({
         variant: "error",
-        message: "Failed to submit transfer"
+        message: "Failed to submit transfer",
       });
       return;
     }
@@ -214,20 +237,20 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         if (event.value.ok) {
           showNotification({
             variant: "success",
-            message: `Transfer of ${amount} VARCH was successful!`
+            message: `Transfer of ${amount} VARCH was successful!`,
           });
           onClose();
         } else {
           showNotification({
             variant: "error",
-            message: "Transaction failed"
+            message: "Transaction failed",
           });
         }
         break;
       default:
         showNotification({
           variant: "success",
-          message: "Transaction pending..."
+          message: "Transaction pending...",
         });
     }
   });
@@ -244,14 +267,23 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     console.log("Selected asset:", selectedAsset);
 
     if (!rawAmount || !beneficiaryAccount || !selectedAsset) {
-      console.log("Missing required parameters", { rawAmount, beneficiaryAccount, selectedAsset });
+      console.log("Missing required parameters", {
+        rawAmount,
+        beneficiaryAccount,
+        selectedAsset,
+      });
       return undefined;
     }
 
     // If we have a native token, assetId might be optional in some cases
     // Otherwise, ensure we have a valid assetId
-    if (!isNativeToken(selectedAsset.metadata.location) && assetId === undefined) {
-      console.log("Asset ID is required for non-native tokens but is undefined");
+    if (
+      !isNativeToken(selectedAsset.metadata.location) &&
+      assetId === undefined
+    ) {
+      console.log(
+        "Asset ID is required for non-native tokens but is undefined",
+      );
       return undefined;
     }
 
@@ -270,10 +302,10 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         setIsProcessing(false);
         showNotification({
           variant: "success",
-          message: `Bridge of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`
+          message: `Bridge of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
         });
         onClose();
-      }
+      },
     };
   };
 
@@ -285,7 +317,8 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     if (!selectedAsset || !coreStorage || !amount || !selectedAccount) {
       showNotification({
         variant: "error",
-        message: "Please select an asset, enter an amount, and connect a wallet.",
+        message:
+          "Please select an asset, enter an amount, and connect a wallet.",
       });
       return;
     }
@@ -295,7 +328,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       showNotification({
         variant: "error",
-        message: "Please enter a valid amount greater than zero."
+        message: "Please enter a valid amount greater than zero.",
       });
       return;
     }
@@ -305,7 +338,8 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     if (rawAmount === undefined) {
       showNotification({
         variant: "error",
-        message: "Could not convert amount to the correct format. Please check your input."
+        message:
+          "Could not convert amount to the correct format. Please check your input.",
       });
       return;
     }
@@ -326,7 +360,9 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
       console.error("Failed to submit transaction:", error);
       showNotification({
         variant: "error",
-        message: "Failed to submit transaction: " + (error instanceof Error ? error.message : "Unknown error"),
+        message:
+          "Failed to submit transaction: " +
+          (error instanceof Error ? error.message : "Unknown error"),
       });
       setIsProcessing(false);
     }
@@ -334,12 +370,11 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
 
   // Filter assets to only show those with supported bridges
   const getFilteredAssets = () => {
-    return registeredAssets
-      .filter(asset => {
-        if (!asset.metadata.location) return false;
-        // Check if we have a bridge implementation for this asset location
-        return isBridgeSupportedIn(asset.metadata.location);
-      });
+    return registeredAssets.filter((asset) => {
+      if (!asset.metadata.location) return false;
+      // Check if we have a bridge implementation for this asset location
+      return isBridgeSupportedIn(asset.metadata.location);
+    });
   };
 
   // Get formatted balance for display
@@ -348,11 +383,20 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
 
     // For native VARCH token
     if (selectedAsset.isNativeVarch) {
-      if (nativeBalance && typeof nativeBalance === 'object' && 'data' in nativeBalance && nativeBalance.data) {
-        return new DenominatedNumber(
-          nativeBalance.data.free || 0n,
-          selectedAsset.metadata.decimals
-        ).toLocaleString() + " " + selectedAsset.metadata.symbol;
+      if (
+        nativeBalance &&
+        typeof nativeBalance === "object" &&
+        "data" in nativeBalance &&
+        nativeBalance.data
+      ) {
+        return (
+          new DenominatedNumber(
+            nativeBalance.data.free || 0n,
+            selectedAsset.metadata.decimals,
+          ).toLocaleString() +
+          " " +
+          selectedAsset.metadata.symbol
+        );
       }
       return "Loading...";
     }
@@ -361,22 +405,33 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
     if (!assetHubBalance) return "Loading...";
 
     // For native tokens (like DOT)
-    if (selectedAsset.metadata.location && isNativeToken(selectedAsset.metadata.location)) {
-      if (typeof assetHubBalance === 'object' && 'data' in assetHubBalance) {
+    if (
+      selectedAsset.metadata.location &&
+      isNativeToken(selectedAsset.metadata.location)
+    ) {
+      if (typeof assetHubBalance === "object" && "data" in assetHubBalance) {
         const freeBalance = assetHubBalance.data?.free || 0n;
-        return new DenominatedNumber(
-          freeBalance,
-          selectedAsset.metadata.decimals
-        ).toLocaleString() + " " + selectedAsset.metadata.symbol;
+        return (
+          new DenominatedNumber(
+            freeBalance,
+            selectedAsset.metadata.decimals,
+          ).toLocaleString() +
+          " " +
+          selectedAsset.metadata.symbol
+        );
       }
     }
 
     // For other assets
-    if (typeof assetHubBalance === 'object' && 'balance' in assetHubBalance) {
-      return new DenominatedNumber(
-        assetHubBalance.balance ?? 0n,
-        selectedAsset.metadata.decimals
-      ).toLocaleString() + " " + selectedAsset.metadata.symbol;
+    if (typeof assetHubBalance === "object" && "balance" in assetHubBalance) {
+      return (
+        new DenominatedNumber(
+          assetHubBalance.balance ?? 0n,
+          selectedAsset.metadata.decimals,
+        ).toLocaleString() +
+        " " +
+        selectedAsset.metadata.symbol
+      );
     }
 
     return "Loading...";
@@ -384,26 +439,26 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
 
   // Determine if we can proceed based on current step
   const canProceed = () => {
-    if (step === 'select-asset') return !!selectedAsset;
-    if (step === 'enter-amount') return !!amount && parseFloat(amount) > 0;
+    if (step === "select-asset") return !!selectedAsset;
+    if (step === "enter-amount") return !!amount && parseFloat(amount) > 0;
     return true;
   };
 
   // Handle moving to the next step
   const handleNextStep = () => {
-    if (step === 'select-asset' && selectedAsset) {
-      setStep('enter-amount');
-    } else if (step === 'enter-amount' && amount) {
-      setStep('review');
+    if (step === "select-asset" && selectedAsset) {
+      setStep("enter-amount");
+    } else if (step === "enter-amount" && amount) {
+      setStep("review");
     }
   };
 
   // Handle going back to the previous step
   const handleBackStep = () => {
-    if (step === 'enter-amount') {
-      setStep('select-asset');
-    } else if (step === 'review') {
-      setStep('enter-amount');
+    if (step === "enter-amount") {
+      setStep("select-asset");
+    } else if (step === "review") {
+      setStep("enter-amount");
     }
   };
 
@@ -421,45 +476,57 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         name: "InvArch",
         existential_deposit: 1000000000000n,
         location: undefined,
-        additional: 0n
+        additional: 0n,
       },
-      isNativeVarch: true
+      isNativeVarch: true,
     };
 
-    console.log('Filtered assets:', filteredAssets);
+    console.log("Filtered assets:", filteredAssets);
 
     switch (step) {
-      case 'select-asset':
+      case "select-asset":
         return (
-          <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
+          <div
+            className={css({
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            })}
+          >
             <p className={css({ marginBottom: "1rem", color: "content" })}>
               Select an asset to fund the DAO
             </p>
-            <div className={css({
-              display: "grid",
-              gap: "0.5rem",
-              maxHeight: "min(400px, 50vh)",
-              overflowY: "auto",
-              padding: "1rem",
-              backgroundColor: "surfaceContainer",
-              borderRadius: "xl",
-              border: "1px solid token(colors.surfaceContainerHighest)",
-              "@media (max-width: 768px)": {
-                maxHeight: "min(300px, 40vh)",
-                padding: "0.75rem"
-              }
-            })}>
+            <div
+              className={css({
+                display: "grid",
+                gap: "0.5rem",
+                maxHeight: "min(400px, 50vh)",
+                overflowY: "auto",
+                padding: "1rem",
+                backgroundColor: "surfaceContainer",
+                borderRadius: "xl",
+                border: "1px solid token(colors.surfaceContainerHighest)",
+                "@media (max-width: 768px)": {
+                  maxHeight: "min(300px, 40vh)",
+                  padding: "0.75rem",
+                },
+              })}
+            >
               {/* Add VARCH as the first option */}
-              <div className={css({
-                marginBottom: "1.5rem",
-              })}>
-                <h4 className={css({
-                  fontSize: "0.9rem",
-                  fontWeight: "500",
-                  color: "content.muted",
-                  marginBottom: "0.75rem",
-                  paddingLeft: "0.5rem"
-                })}>
+              <div
+                className={css({
+                  marginBottom: "1.5rem",
+                })}
+              >
+                <h4
+                  className={css({
+                    fontSize: "0.9rem",
+                    fontWeight: "500",
+                    color: "content.muted",
+                    marginBottom: "0.75rem",
+                    paddingLeft: "0.5rem",
+                  })}
+                >
                   Native Token
                 </h4>
                 <button
@@ -470,43 +537,59 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "0.75rem 1rem",
-                    backgroundColor: selectedAsset?.isNativeVarch ? "primary" : "surfaceContainerHigh",
-                    color: selectedAsset?.isNativeVarch ? "onPrimary" : "content",
+                    backgroundColor: selectedAsset?.isNativeVarch
+                      ? "primary"
+                      : "surfaceContainerHigh",
+                    color: selectedAsset?.isNativeVarch
+                      ? "onPrimary"
+                      : "content",
                     border: "none",
                     borderRadius: "lg",
                     cursor: "pointer",
                     transition: "all 0.2s ease",
                     width: "100%",
                     "&:hover": {
-                      backgroundColor: selectedAsset?.isNativeVarch ? "primary" : "surfaceContainerHighest",
-                    }
+                      backgroundColor: selectedAsset?.isNativeVarch
+                        ? "primary"
+                        : "surfaceContainerHighest",
+                    },
                   })}
                 >
                   <span className={css({ fontWeight: "500" })}>VARCH</span>
-                  <span className={css({
-                    fontSize: "0.875rem",
-                    color: selectedAsset?.isNativeVarch ? "onPrimary" : "content.muted"
-                  })}>Native</span>
+                  <span
+                    className={css({
+                      fontSize: "0.875rem",
+                      color: selectedAsset?.isNativeVarch
+                        ? "onPrimary"
+                        : "content.muted",
+                    })}
+                  >
+                    Native
+                  </span>
                 </button>
               </div>
 
               {/* Bridged assets section */}
               {filteredAssets.length > 0 && (
                 <div>
-                  <h4 className={css({
-                    fontSize: "0.9rem",
-                    fontWeight: "500",
-                    color: "content.muted",
-                    marginBottom: "0.75rem",
-                    paddingLeft: "0.5rem"
-                  })}>
+                  <h4
+                    className={css({
+                      fontSize: "0.9rem",
+                      fontWeight: "500",
+                      color: "content.muted",
+                      marginBottom: "0.75rem",
+                      paddingLeft: "0.5rem",
+                    })}
+                  >
                     Asset Hub Tokens
                   </h4>
-                  <div className={css({
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.75rem"
-                  })}>
+                  <div
+                    className={css({
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.75rem",
+                    })}
+                  >
                     {filteredAssets.map((asset) => (
                       <button
                         key={asset.id}
@@ -516,22 +599,40 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                           justifyContent: "space-between",
                           alignItems: "center",
                           padding: "0.75rem 1rem",
-                          backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHigh",
-                          color: selectedAsset?.id === asset.id ? "onPrimary" : "content",
+                          backgroundColor:
+                            selectedAsset?.id === asset.id
+                              ? "primary"
+                              : "surfaceContainerHigh",
+                          color:
+                            selectedAsset?.id === asset.id
+                              ? "onPrimary"
+                              : "content",
                           border: "none",
                           borderRadius: "lg",
                           cursor: "pointer",
                           transition: "all 0.2s ease",
                           "&:hover": {
-                            backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHighest",
-                          }
+                            backgroundColor:
+                              selectedAsset?.id === asset.id
+                                ? "primary"
+                                : "surfaceContainerHighest",
+                          },
                         })}
                       >
-                        <span className={css({ fontWeight: "500" })}>{asset.metadata.symbol}</span>
-                        <span className={css({
-                          fontSize: "0.875rem",
-                          color: selectedAsset?.id === asset.id ? "onPrimary" : "content.muted"
-                        })}>Asset Hub</span>
+                        <span className={css({ fontWeight: "500" })}>
+                          {asset.metadata.symbol}
+                        </span>
+                        <span
+                          className={css({
+                            fontSize: "0.875rem",
+                            color:
+                              selectedAsset?.id === asset.id
+                                ? "onPrimary"
+                                : "content.muted",
+                          })}
+                        >
+                          Asset Hub
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -539,35 +640,44 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               )}
             </div>
             {filteredAssets.length === 0 && (
-              <p className={css({
-                textAlign: "center",
-                color: "content.muted",
-                padding: "1rem",
-                backgroundColor: "surfaceContainer",
-                borderRadius: "md",
-                fontSize: "0.875rem"
-              })}>
+              <p
+                className={css({
+                  textAlign: "center",
+                  color: "content.muted",
+                  padding: "1rem",
+                  backgroundColor: "surfaceContainer",
+                  borderRadius: "md",
+                  fontSize: "0.875rem",
+                })}
+              >
                 No assets are available. Make sure your wallet is connected.
               </p>
             )}
           </div>
         );
 
-      case 'enter-amount':
+      case "enter-amount":
         return (
-          <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
+          <div
+            className={css({
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            })}
+          >
             <p className={css({ marginBottom: "1rem" })}>
-              {selectedAsset?.isNativeVarch ?
-                `Enter the amount of VARCH to transfer to the DAO` :
-                `Enter the amount of ${selectedAsset?.metadata.symbol} to bridge from your Asset Hub account to the DAO`
-              }
+              {selectedAsset?.isNativeVarch
+                ? `Enter the amount of VARCH to transfer to the DAO`
+                : `Enter the amount of ${selectedAsset?.metadata.symbol} to bridge from your Asset Hub account to the DAO`}
             </p>
             <TextInput
               label={`Amount (${selectedAsset?.metadata.symbol})`}
               value={amount}
               onChangeValue={(value) => {
                 // Allow decimal points and numbers
-                const regex = new RegExp(`^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`);
+                const regex = new RegExp(
+                  `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
+                );
                 if (value === "" || regex.test(value)) {
                   setAmount(value);
                 }
@@ -575,52 +685,110 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               placeholder={`Enter amount in ${selectedAsset?.metadata.symbol}`}
               className={css({ width: "100%" })}
             />
-            <div className={css({ fontSize: "0.85rem", color: "content.muted", display: "flex", flexDirection: "column", gap: "0.5rem" })}>
+            <div
+              className={css({
+                fontSize: "0.85rem",
+                color: "content.muted",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              })}
+            >
+              <p>Available balance: {getFormattedBalance()}</p>
               <p>
-                Available balance: {getFormattedBalance()}
-              </p>
-              <p>
-                {selectedAsset?.isNativeVarch ?
-                  `Make sure you have enough funds in your account to cover the transaction fees.` :
-                  `Make sure you have enough funds in your Asset Hub account to cover the transaction fees.`
-                }
+                {selectedAsset?.isNativeVarch
+                  ? `Make sure you have enough funds in your account to cover the transaction fees.`
+                  : `Make sure you have enough funds in your Asset Hub account to cover the transaction fees.`}
               </p>
             </div>
           </div>
         );
 
-      case 'review':
+      case "review":
         return (
-          <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
-            <h3 className={css({ fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1rem" })}>
-              {selectedAsset?.isNativeVarch ?
-                `Review Your Transfer` :
-                `Review Your Bridge Transaction`
-              }
+          <div
+            className={css({
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            })}
+          >
+            <h3
+              className={css({
+                fontSize: "1.1rem",
+                fontWeight: "bold",
+                marginBottom: "1rem",
+              })}
+            >
+              {selectedAsset?.isNativeVarch
+                ? `Review Your Transfer`
+                : `Review Your Bridge Transaction`}
             </h3>
-            <div className={css({ display: "flex", flexDirection: "column", gap: "0.5rem" })}>
-              <div className={css({ display: "flex", justifyContent: "space-between" })}>
+            <div
+              className={css({
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              })}
+            >
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                })}
+              >
                 <span>Asset:</span>
                 <span>{selectedAsset?.metadata.symbol}</span>
               </div>
-              <div className={css({ display: "flex", justifyContent: "space-between" })}>
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                })}
+              >
                 <span>Amount:</span>
-                <span>{amount} {selectedAsset?.metadata.symbol}</span>
+                <span>
+                  {amount} {selectedAsset?.metadata.symbol}
+                </span>
               </div>
-              <div className={css({ display: "flex", justifyContent: "space-between" })}>
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                })}
+              >
                 <span>From:</span>
-                <span>{selectedAsset?.isNativeVarch ? "Your InvArch Account" : "Your Asset Hub Account"}</span>
+                <span>
+                  {selectedAsset?.isNativeVarch
+                    ? "Your InvArch Account"
+                    : "Your Asset Hub Account"}
+                </span>
               </div>
-              <div className={css({ display: "flex", justifyContent: "space-between" })}>
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                })}
+              >
                 <span>To:</span>
-                <span>DAO Account: {coreStorage?.account ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}` : "Loading..."}</span>
+                <span>
+                  DAO Account:{" "}
+                  {coreStorage?.account
+                    ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}`
+                    : "Loading..."}
+                </span>
               </div>
             </div>
-            <p className={css({ fontSize: "0.85rem", color: "content.muted", marginTop: "1rem" })}>
-              {selectedAsset?.isNativeVarch ?
-                `After confirming, you will need to sign the transaction to transfer VARCH to the DAO.` :
-                `After confirming, you will need to sign the transaction to bridge the assets in to the DAO.`
-              }
+            <p
+              className={css({
+                fontSize: "0.85rem",
+                color: "content.muted",
+                marginTop: "1rem",
+              })}
+            >
+              {selectedAsset?.isNativeVarch
+                ? `After confirming, you will need to sign the transaction to transfer VARCH to the DAO.`
+                : `After confirming, you will need to sign the transaction to bridge the assets in to the DAO.`}
             </p>
           </div>
         );
@@ -630,18 +798,31 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
   // Render the navigation and action buttons based on current step
   const renderActionButtons = () => {
     return (
-      <div className={css({ display: "flex", justifyContent: "space-between", marginTop: "1.5rem" })}>
-        {step !== 'select-asset' ? (
+      <div
+        className={css({
+          display: "flex",
+          justifyContent: "space-between",
+          marginTop: "1.5rem",
+        })}
+      >
+        {step !== "select-asset" ? (
           <Button
             onClick={handleBackStep}
             className={css({
               display: "inline-flex",
               alignItems: "center",
               gap: "0.5rem",
-              width: "auto"
+              width: "auto",
             })}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.2rem",
+              }}
+            >
               <ArrowLeftIcon size={16} />
               <span>Back</span>
             </div>
@@ -650,7 +831,7 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
           <div></div> // Empty div to maintain layout
         )}
 
-        {step !== 'review' ? (
+        {step !== "review" ? (
           <Button
             onClick={handleNextStep}
             disabled={!canProceed()}
@@ -658,10 +839,17 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               display: "inline-flex",
               alignItems: "center",
               gap: "0.5rem",
-              width: "auto"
+              width: "auto",
             })}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.2rem",
+              }}
+            >
               <span>Next</span>
               <ArrowRightIcon size={16} />
             </div>
@@ -677,26 +865,45 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
               width: "auto",
               "@media (max-width: 768px)": {
                 fontSize: "0.875rem",
-                padding: "0.5rem 0.75rem"
-              }
+                padding: "0.5rem 0.75rem",
+              },
             })}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem",
+              }}
+            >
               <CheckCircleIcon size={16} />
-              <span>{selectedAsset?.isNativeVarch ? "Transfer VARCH" : (
-                <span className={css({
-                  "@media (max-width: 768px)": {
-                    display: "none"
-                  }
-                })}>Show Bridge Instructions</span>
-              )}
+              <span>
+                {selectedAsset?.isNativeVarch ? (
+                  "Transfer VARCH"
+                ) : (
+                  <span
+                    className={css({
+                      "@media (max-width: 768px)": {
+                        display: "none",
+                      },
+                    })}
+                  >
+                    Show Bridge Instructions
+                  </span>
+                )}
                 {!selectedAsset?.isNativeVarch && (
-                  <span className={css({
-                    "@media (min-width: 769px)": {
-                      display: "none"
-                    }
-                  })}>Bridge</span>
-                )}</span>
+                  <span
+                    className={css({
+                      "@media (min-width: 769px)": {
+                        display: "none",
+                      },
+                    })}
+                  >
+                    Bridge
+                  </span>
+                )}
+              </span>
             </div>
           </Button>
         )}
@@ -725,18 +932,22 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
         width: `min(34rem, 100dvw)`,
       })}
     >
-      <div className={css({
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.5rem",
-      })}>
-        {/* Step indicator */}
-        <div className={css({
+      <div
+        className={css({
           display: "flex",
-          justifyContent: "space-between",
-          position: "relative",
-          marginBottom: "1rem"
-        })}>
+          flexDirection: "column",
+          gap: "1.5rem",
+        })}
+      >
+        {/* Step indicator */}
+        <div
+          className={css({
+            display: "flex",
+            justifyContent: "space-between",
+            position: "relative",
+            marginBottom: "1rem",
+          })}
+        >
           {["select-asset", "enter-amount", "review"].map((stepName, index) => (
             <div
               key={stepName}
@@ -745,51 +956,78 @@ export function BridgeAssetsInDialog({ daoId, onClose }: BridgeAssetsInDialogPro
                 flexDirection: "column",
                 alignItems: "center",
                 position: "relative",
-                zIndex: 1
+                zIndex: 1,
               })}
             >
-              <div className={css({
-                width: "2rem",
-                height: "2rem",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: step === stepName ? "primary" :
-                  (["select-asset", "enter-amount", "review"].indexOf(step) > index ? "primary" : "surface"),
-                color: step === stepName ? "onPrimary" :
-                  (["select-asset", "enter-amount", "review"].indexOf(step) > index ? "onPrimary" : "content"),
-                marginBottom: "0.5rem"
-              })}>
+              <div
+                className={css({
+                  width: "2rem",
+                  height: "2rem",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor:
+                    step === stepName
+                      ? "primary"
+                      : ["select-asset", "enter-amount", "review"].indexOf(
+                            step,
+                          ) > index
+                        ? "primary"
+                        : "surface",
+                  color:
+                    step === stepName
+                      ? "onPrimary"
+                      : ["select-asset", "enter-amount", "review"].indexOf(
+                            step,
+                          ) > index
+                        ? "onPrimary"
+                        : "content",
+                  marginBottom: "0.5rem",
+                })}
+              >
                 {index + 1}
               </div>
-              <span className={css({
-                fontSize: "0.8rem",
-                color: step === stepName ? "content" : "content.muted"
-              })}>
-                {stepName === "select-asset" ? "Select Asset" :
-                  stepName === "enter-amount" ? "Enter Amount" : "Review"}
+              <span
+                className={css({
+                  fontSize: "0.8rem",
+                  color: step === stepName ? "content" : "content.muted",
+                })}
+              >
+                {stepName === "select-asset"
+                  ? "Select Asset"
+                  : stepName === "enter-amount"
+                    ? "Enter Amount"
+                    : "Review"}
               </span>
             </div>
           ))}
 
           {/* Connecting line between steps */}
-          <div className={css({
-            position: "absolute",
-            top: "1rem",
-            left: "2.5rem",
-            right: "2.5rem",
-            height: "2px",
-            backgroundColor: "surface",
-            zIndex: 0
-          })}>
-            <div className={css({
-              height: "100%",
-              backgroundColor: "primary",
-              width: step === "select-asset" ? "0%" :
-                step === "enter-amount" ? "50%" : "100%",
-              transition: "width 0.3s ease-in-out"
-            })}></div>
+          <div
+            className={css({
+              position: "absolute",
+              top: "1rem",
+              left: "2.5rem",
+              right: "2.5rem",
+              height: "2px",
+              backgroundColor: "surface",
+              zIndex: 0,
+            })}
+          >
+            <div
+              className={css({
+                height: "100%",
+                backgroundColor: "primary",
+                width:
+                  step === "select-asset"
+                    ? "0%"
+                    : step === "enter-amount"
+                      ? "50%"
+                      : "100%",
+                transition: "width 0.3s ease-in-out",
+              })}
+            ></div>
           </div>
         </div>
 

@@ -1,19 +1,12 @@
 import { useLazyLoadQuery } from "@reactive-dot/react";
 
-
 export function useLazyLoadRegisteredAssets() {
-
-
   const assetMetadata = useLazyLoadQuery((builder) =>
-    builder.readStorageEntries(
-      "AssetRegistry",
-      "Metadata",
-      []
-    ),
+    builder.readStorageEntries("AssetRegistry", "Metadata", []),
   );
 
   const tokens = assetMetadata
-    .filter(token => token.keyArgs[0] !== 0)
+    .filter((token) => token.keyArgs[0] !== 0)
     .map((token) => ({
       id: token.keyArgs[0],
       metadata: {
@@ -23,7 +16,7 @@ export function useLazyLoadRegisteredAssets() {
         existential_deposit: token.value.existential_deposit,
         location: token.value.location,
         additional: token.value.additional,
-      }
+      },
     }));
 
   tokens.push({

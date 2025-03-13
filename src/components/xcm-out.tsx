@@ -1,18 +1,20 @@
-import { ModalDialog } from "./modal-dialog";
-import { Button } from "./button";
-import { useState } from "react";
-import { TextInput } from "./text-input";
-import { useNotification } from "../contexts/notification-context";
 import { css } from "../../styled-system/css";
-import { useLazyLoadQuery } from "@reactive-dot/react";
-import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
-import { DenominatedNumber } from "@reactive-dot/utils";
+import { useNotification } from "../contexts/notification-context";
+import { selectedAccountAtom } from "../features/accounts/store";
 import {
   useInvArchBridgeOutOperation,
   type BridgeStatusChange,
-  isBridgeSupportedOut
+  isBridgeSupportedOut,
 } from "../features/xcm/bridge-utils";
+import { Button } from "./button";
+import { ModalDialog } from "./modal-dialog";
+import { TextInput } from "./text-input";
+import { useLazyLoadQuery } from "@reactive-dot/react";
+import { DenominatedNumber } from "@reactive-dot/utils";
+import { useAtomValue } from "jotai";
+import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import type { Binary, SS58String } from "polkadot-api";
+import { useState } from "react";
 
 interface BridgeAssetsOutDialogProps {
   daoId: number;
@@ -49,7 +51,10 @@ interface Asset {
   };
 }
 
-export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogProps) {
+export function BridgeAssetsOutDialog({
+  daoId,
+  onClose,
+}: BridgeAssetsOutDialogProps) {
   const [selectedAsset, setSelectedAsset] = useState<{
     id: number;
     metadata: {
@@ -62,7 +67,9 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
   const [amount, setAmount] = useState("");
   const [destinationAccount, setDestinationAccount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [step, setStep] = useState<'select-asset' | 'enter-amount' | 'review'>('select-asset');
+  const [step, setStep] = useState<"select-asset" | "enter-amount" | "review">(
+    "select-asset",
+  );
   const { showNotification } = useNotification();
 
   // Get the DAO's core storage to access its account
@@ -70,26 +77,51 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
     builder.readStorage("INV4", "CoreStorage", [daoId]),
   );
 
+  // Add destination chain constant - can be made dynamic in the future
+  const destinationChain = "Asset Hub";
+
+  // Add selected account import
+  const selectedAccount = useAtomValue(selectedAccountAtom);
+
+  // Function to use selected account as destination
+  const useSelectedAccountAsDestination = () => {
+    if (selectedAccount?.address) {
+      setDestinationAccount(selectedAccount.address);
+    } else {
+      showNotification({
+        variant: "error",
+        message: "No account selected. Please select an account first.",
+      });
+    }
+  };
+
   // Query DAO's token balances with proper typing
-  const daoTokens: TokenBalance[] = useLazyLoadQuery((builder) => {
-    if (!coreStorage?.account) return null;
-    return builder.readStorageEntries("Tokens", "Accounts", [coreStorage.account]);
-  }) as unknown as TokenBalance[] || [];
+  const daoTokens: TokenBalance[] =
+    (useLazyLoadQuery((builder) => {
+      if (!coreStorage?.account) return null;
+      return builder.readStorageEntries("Tokens", "Accounts", [
+        coreStorage.account,
+      ]);
+    }) as unknown as TokenBalance[]) || [];
 
   // Get asset metadata for the tokens with proper typing
-  const assetMetadata: AssetMetadata[] = useLazyLoadQuery((builder) => {
-    if (!daoTokens?.length) return null;
-    return builder.readStorages(
-      "AssetRegistry",
-      "Metadata",
-      daoTokens.map((token) => [token.keyArgs[1]] as const),
-    );
-  }) as unknown as AssetMetadata[] || [];
+  const assetMetadata: AssetMetadata[] =
+    (useLazyLoadQuery((builder) => {
+      if (!daoTokens?.length) return null;
+      return builder.readStorages(
+        "AssetRegistry",
+        "Metadata",
+        daoTokens.map((token) => [token.keyArgs[1]] as const),
+      );
+    }) as unknown as AssetMetadata[]) || [];
 
   // Convert amount to proper decimals
   const getRawAmount = () => {
     if (!amount || !selectedAsset) {
-      console.log("Missing amount or asset for conversion:", { amount, asset: selectedAsset?.id });
+      console.log("Missing amount or asset for conversion:", {
+        amount,
+        asset: selectedAsset?.id,
+      });
       return undefined;
     }
 
@@ -130,16 +162,16 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
   // Function to handle status changes from the bridge
   const handleBridgeStatusChange = (status: BridgeStatusChange) => {
     // Update processing state
-    setIsProcessing(status.status === 'pending');
+    setIsProcessing(status.status === "pending");
 
     // Display appropriate notification
     showNotification({
-      variant: status.status === 'error' ? 'error' : 'success',
-      message: status.message
+      variant: status.status === "error" ? "error" : "success",
+      message: status.message,
     });
 
     // Close dialog on successful completion
-    if (status.status === 'success' && status.message.includes('successful')) {
+    if (status.status === "success" && status.message.includes("successful")) {
       onClose();
     }
   };
@@ -154,7 +186,11 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
     console.log("Destination account:", destinationAccount);
 
     if (!rawAmount || !destinationAccount || !selectedAsset) {
-      console.log("Missing required parameters", { rawAmount, destinationAccount, selectedAsset });
+      console.log("Missing required parameters", {
+        rawAmount,
+        destinationAccount,
+        selectedAsset,
+      });
       return undefined;
     }
 
@@ -168,10 +204,10 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
         setIsProcessing(false);
         showNotification({
           variant: "success",
-          message: `Bridge out of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`
+          message: `Bridge out of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
         });
         onClose();
-      }
+      },
     };
   };
 
@@ -183,7 +219,8 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
     if (!selectedAsset || !destinationAccount || !amount) {
       showNotification({
         variant: "error",
-        message: "Please select an asset, enter an amount, and provide a destination account.",
+        message:
+          "Please select an asset, enter an amount, and provide a destination account.",
       });
       return;
     }
@@ -193,7 +230,7 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       showNotification({
         variant: "error",
-        message: "Please enter a valid amount greater than zero."
+        message: "Please enter a valid amount greater than zero.",
       });
       return;
     }
@@ -203,20 +240,26 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
     if (rawAmount === undefined) {
       showNotification({
         variant: "error",
-        message: "Could not convert amount to the correct format. Please check your input."
+        message:
+          "Could not convert amount to the correct format. Please check your input.",
       });
       return;
     }
 
     try {
-      console.log("Starting bridge out execution with params:", getBridgeParams());
+      console.log(
+        "Starting bridge out execution with params:",
+        getBridgeParams(),
+      );
       // Execute the bridge operation
       await invArchBridge.executeBridgeOut();
     } catch (error) {
       console.error("Failed to submit bridge out transaction:", error);
       showNotification({
         variant: "error",
-        message: "Failed to submit bridge out transaction: " + (error instanceof Error ? error.message : "Unknown error"),
+        message:
+          "Failed to submit bridge out transaction: " +
+          (error instanceof Error ? error.message : "Unknown error"),
       });
       setIsProcessing(false);
     }
@@ -237,7 +280,13 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
 
       // Explicitly check for metadata properties to satisfy TypeScript
       const metadata = assetMetadata[i];
-      if (!metadata || metadata.symbol === undefined || metadata.decimals === undefined || metadata.name === undefined) continue;
+      if (
+        !metadata ||
+        metadata.symbol === undefined ||
+        metadata.decimals === undefined ||
+        metadata.name === undefined
+      )
+        continue;
 
       if (!isBridgeSupportedOut(token.keyArgs[1])) continue;
 
@@ -247,8 +296,8 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
         metadata: {
           symbol: metadata.symbol.asText(),
           decimals: metadata.decimals,
-          name: metadata.name.asText()
-        }
+          name: metadata.name.asText(),
+        },
       });
     }
 
@@ -259,39 +308,45 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
   const getFormattedBalance = () => {
     if (!selectedAsset || !daoTokens) return "Loading...";
 
-    const token = daoTokens.find(t => t?.keyArgs?.[1] === selectedAsset.id);
+    const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
     if (!token || !token.value || !token.value.free) return "Loading...";
 
-    return new DenominatedNumber(
-      token.value.free,
-      selectedAsset.metadata.decimals
-    ).toLocaleString() + " " + selectedAsset.metadata.symbol;
+    return (
+      new DenominatedNumber(
+        token.value.free,
+        selectedAsset.metadata.decimals,
+      ).toLocaleString() +
+      " " +
+      selectedAsset.metadata.symbol
+    );
   };
 
   // Determine if we can proceed based on current step
   const canProceed = () => {
-    if (step === 'select-asset') return !!selectedAsset;
-    if (step === 'enter-amount') {
-      return !!amount && parseFloat(amount) > 0 && destinationAccount.length > 0;
+    if (step === "select-asset") return !!selectedAsset;
+    if (step === "enter-amount") {
+      return (
+        !!amount && parseFloat(amount) > 0 && destinationAccount.length > 0
+      );
     }
     return true;
   };
 
   // Handle moving to the next step
   const handleNextStep = () => {
-    if (step === 'select-asset' && selectedAsset) {
-      setStep('enter-amount');
-    } else if (step === 'enter-amount' && amount && destinationAccount) {
-      setStep('review');
+    if (step === "select-asset" && selectedAsset) {
+      setStep("enter-amount");
+    } else if (step === "enter-amount" && amount && destinationAccount) {
+      setStep("review");
     }
   };
 
   // Handle going back to the previous step
   const handleBackStep = () => {
-    if (step === 'enter-amount') {
-      setStep('select-asset');
-    } else if (step === 'review') {
-      setStep('enter-amount');
+    if (step === "enter-amount") {
+      setStep("select-asset");
+    } else if (step === "review") {
+      setStep("enter-amount");
     }
   };
 
@@ -301,41 +356,53 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
     const availableAssets = getAvailableAssets();
 
     switch (step) {
-      case 'select-asset':
+      case "select-asset":
         return (
-          <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
+          <div
+            className={css({
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            })}
+          >
             <p className={css({ marginBottom: "1rem", color: "content" })}>
               Select an asset to bridge out of the DAO to Asset Hub
             </p>
-            <div className={css({
-              display: "grid",
-              gap: "0.5rem",
-              maxHeight: "min(400px, 50vh)",
-              overflowY: "auto",
-              padding: "1rem",
-              backgroundColor: "surfaceContainer",
-              borderRadius: "xl",
-              border: "1px solid token(colors.surfaceContainerHighest)",
-              "@media (max-width: 768px)": {
-                maxHeight: "min(300px, 40vh)",
-                padding: "0.75rem"
-              }
-            })}>
+            <div
+              className={css({
+                display: "grid",
+                gap: "0.5rem",
+                maxHeight: "min(400px, 50vh)",
+                overflowY: "auto",
+                padding: "1rem",
+                backgroundColor: "surfaceContainer",
+                borderRadius: "xl",
+                border: "1px solid token(colors.surfaceContainerHighest)",
+                "@media (max-width: 768px)": {
+                  maxHeight: "min(300px, 40vh)",
+                  padding: "0.75rem",
+                },
+              })}
+            >
               <div>
-                <h4 className={css({
-                  fontSize: "0.9rem",
-                  fontWeight: "500",
-                  color: "content.muted",
-                  marginBottom: "0.75rem",
-                  paddingLeft: "0.5rem"
-                })}>
+                <h4
+                  className={css({
+                    fontSize: "0.9rem",
+                    fontWeight: "500",
+                    color: "content.muted",
+                    marginBottom: "0.75rem",
+                    paddingLeft: "0.5rem",
+                  })}
+                >
                   Available Assets
                 </h4>
-                <div className={css({
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.75rem"
-                })}>
+                <div
+                  className={css({
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.75rem",
+                  })}
+                >
                   {availableAssets.map((asset) => (
                     <button
                       key={asset.id}
@@ -345,25 +412,41 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
                         justifyContent: "space-between",
                         alignItems: "center",
                         padding: "0.75rem 1rem",
-                        backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHigh",
-                        color: selectedAsset?.id === asset.id ? "onPrimary" : "content",
+                        backgroundColor:
+                          selectedAsset?.id === asset.id
+                            ? "primary"
+                            : "surfaceContainerHigh",
+                        color:
+                          selectedAsset?.id === asset.id
+                            ? "onPrimary"
+                            : "content",
                         border: "none",
                         borderRadius: "lg",
                         cursor: "pointer",
                         transition: "all 0.2s ease",
                         "&:hover": {
-                          backgroundColor: selectedAsset?.id === asset.id ? "primary" : "surfaceContainerHighest",
-                        }
+                          backgroundColor:
+                            selectedAsset?.id === asset.id
+                              ? "primary"
+                              : "surfaceContainerHighest",
+                        },
                       })}
                     >
-                      <span className={css({ fontWeight: "500" })}>{asset.metadata.symbol}</span>
-                      <span className={css({
-                        fontSize: "0.875rem",
-                        color: selectedAsset?.id === asset.id ? "onPrimary" : "content.muted"
-                      })}>
+                      <span className={css({ fontWeight: "500" })}>
+                        {asset.metadata.symbol}
+                      </span>
+                      <span
+                        className={css({
+                          fontSize: "0.875rem",
+                          color:
+                            selectedAsset?.id === asset.id
+                              ? "onPrimary"
+                              : "content.muted",
+                        })}
+                      >
                         {new DenominatedNumber(
                           asset.value.free,
-                          asset.metadata.decimals
+                          asset.metadata.decimals,
                         ).toLocaleString()}
                       </span>
                     </button>
@@ -372,32 +455,44 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
               </div>
             </div>
             {availableAssets.length === 0 && (
-              <p className={css({
-                textAlign: "center",
-                color: "content.muted",
-                padding: "1rem",
-                backgroundColor: "surfaceContainer",
-                borderRadius: "md",
-                fontSize: "0.875rem"
-              })}>
-                No bridgeable assets are available in this DAO. Try adding some assets first.
+              <p
+                className={css({
+                  textAlign: "center",
+                  color: "content.muted",
+                  padding: "1rem",
+                  backgroundColor: "surfaceContainer",
+                  borderRadius: "md",
+                  fontSize: "0.875rem",
+                })}
+              >
+                No bridgeable assets are available in this DAO. Try adding some
+                assets first.
               </p>
             )}
           </div>
         );
 
-      case 'enter-amount':
+      case "enter-amount":
         return (
-          <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
+          <div
+            className={css({
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            })}
+          >
             <p className={css({ marginBottom: "1rem" })}>
-              Enter the amount of {selectedAsset?.metadata.symbol} to bridge from the DAO to Asset Hub
+              Enter the amount of {selectedAsset?.metadata.symbol} to bridge
+              from the DAO to {destinationChain}
             </p>
             <TextInput
               label={`Amount (${selectedAsset?.metadata.symbol})`}
               value={amount}
               onChangeValue={(value) => {
                 // Allow decimal points and numbers
-                const regex = new RegExp(`^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`);
+                const regex = new RegExp(
+                  `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
+                );
                 if (value === "" || regex.test(value)) {
                   setAmount(value);
                 }
@@ -405,52 +500,138 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
               placeholder={`Enter amount in ${selectedAsset?.metadata.symbol}`}
               className={css({ width: "100%" })}
             />
-            <div className={css({ fontSize: "0.85rem", color: "content.muted", display: "flex", flexDirection: "column", gap: "0.5rem" })}>
-              <p>
-                Available balance: {getFormattedBalance()}
-              </p>
+            <div
+              className={css({
+                fontSize: "0.85rem",
+                color: "content.muted",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              })}
+            >
+              <p>Available balance: {getFormattedBalance()}</p>
             </div>
-            <TextInput
-              label="Destination Account (Asset Hub)"
-              value={destinationAccount}
-              onChangeValue={setDestinationAccount}
-              placeholder="Enter the destination account SS58 address"
-              className={css({ width: "100%" })}
-            />
-            <div className={css({ fontSize: "0.85rem", color: "content.muted", display: "flex", flexDirection: "column", gap: "0.5rem" })}>
+            <div
+              className={css({
+                display: "flex",
+                flexDirection: "column",
+                gap: "4",
+                width: "100%",
+              })}
+            >
+              <TextInput
+                label={`Destination Account (${destinationChain})`}
+                value={destinationAccount}
+                onChangeValue={setDestinationAccount}
+                placeholder="Enter destination account address"
+              />
+              <Button
+                onClick={useSelectedAccountAsDestination}
+                className={css({ marginTop: "2" })}
+              >
+                Use My Account Address
+              </Button>
+            </div>
+            <div
+              className={css({
+                fontSize: "0.85rem",
+                color: "content.muted",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              })}
+            >
               <p>
-                Make sure the destination account exists on Asset Hub and can receive the assets.
+                Make sure the destination account exists on {destinationChain}{" "}
+                and can receive the assets.
               </p>
             </div>
           </div>
         );
 
-      case 'review':
+      case "review":
         return (
-          <div className={css({ display: "flex", flexDirection: "column", gap: "1rem" })}>
-            <h3 className={css({ fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1rem" })}>
+          <div
+            className={css({
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            })}
+          >
+            <h3
+              className={css({
+                fontSize: "1.1rem",
+                fontWeight: "bold",
+                marginBottom: "1rem",
+              })}
+            >
               Review Your Bridge Out Transaction
             </h3>
-            <div className={css({ display: "flex", flexDirection: "column", gap: "0.5rem" })}>
-              <div className={css({ display: "flex", justifyContent: "space-between" })}>
+            <div
+              className={css({
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              })}
+            >
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                })}
+              >
                 <span>Asset:</span>
                 <span>{selectedAsset?.metadata.symbol}</span>
               </div>
-              <div className={css({ display: "flex", justifyContent: "space-between" })}>
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                })}
+              >
                 <span>Amount:</span>
-                <span>{amount} {selectedAsset?.metadata.symbol}</span>
+                <span>
+                  {amount} {selectedAsset?.metadata.symbol}
+                </span>
               </div>
-              <div className={css({ display: "flex", justifyContent: "space-between" })}>
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                })}
+              >
                 <span>From:</span>
-                <span>DAO Account: {coreStorage?.account ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}` : "Loading..."}</span>
+                <span>
+                  DAO Account:{" "}
+                  {coreStorage?.account
+                    ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}`
+                    : "Loading..."}
+                </span>
               </div>
-              <div className={css({ display: "flex", justifyContent: "space-between" })}>
+              <div
+                className={css({
+                  display: "flex",
+                  justifyContent: "space-between",
+                })}
+              >
                 <span>To:</span>
-                <span>Asset Hub Account: {destinationAccount ? `${destinationAccount.substring(0, 6)}...${destinationAccount.substring(destinationAccount.length - 6)}` : "Loading..."}</span>
+                <span>
+                  {destinationChain} Account:{" "}
+                  {destinationAccount
+                    ? `${destinationAccount.substring(0, 6)}...${destinationAccount.substring(destinationAccount.length - 6)}`
+                    : "Loading..."}
+                </span>
               </div>
             </div>
-            <p className={css({ fontSize: "0.85rem", color: "content.muted", marginTop: "1rem" })}>
-              After confirming, you will need to sign to create a proposal for the transaction to bridge the assets to Asset Hub.
+            <p
+              className={css({
+                fontSize: "0.85rem",
+                color: "content.muted",
+                marginTop: "1rem",
+              })}
+            >
+              After confirming, you will need to sign to create a proposal for
+              the transaction to bridge the assets to {destinationChain}.
             </p>
           </div>
         );
@@ -460,18 +641,31 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
   // Render the navigation and action buttons based on current step
   const renderActionButtons = () => {
     return (
-      <div className={css({ display: "flex", justifyContent: "space-between", marginTop: "1.5rem" })}>
-        {step !== 'select-asset' ? (
+      <div
+        className={css({
+          display: "flex",
+          justifyContent: "space-between",
+          marginTop: "1.5rem",
+        })}
+      >
+        {step !== "select-asset" ? (
           <Button
             onClick={handleBackStep}
             className={css({
               display: "inline-flex",
               alignItems: "center",
               gap: "0.2rem",
-              width: "auto"
+              width: "auto",
             })}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.2rem",
+              }}
+            >
               <ArrowLeftIcon size={16} />
               <span>Back</span>
             </div>
@@ -480,7 +674,7 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
           <div></div> // Empty div to maintain layout
         )}
 
-        {step !== 'review' ? (
+        {step !== "review" ? (
           <Button
             onClick={handleNextStep}
             disabled={!canProceed()}
@@ -488,10 +682,17 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
               display: "inline-flex",
               alignItems: "center",
               gap: "0.2rem",
-              width: "auto"
+              width: "auto",
             })}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.2rem",
+              }}
+            >
               <span>Next</span>
               <ArrowRightIcon size={16} />
             </div>
@@ -507,22 +708,37 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
               width: "auto",
               "@media (max-width: 768px)": {
                 fontSize: "0.875rem",
-                padding: "0.5rem 0.75rem"
-              }
+                padding: "0.5rem 0.75rem",
+              },
             })}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem",
+              }}
+            >
               <span>
-                <span className={css({
-                  "@media (max-width: 768px)": {
-                    display: "none"
-                  }
-                })}>Bridge Out Assets</span>
-                <span className={css({
-                  "@media (min-width: 769px)": {
-                    display: "none"
-                  }
-                })}>Bridge</span>
+                <span
+                  className={css({
+                    "@media (max-width: 768px)": {
+                      display: "none",
+                    },
+                  })}
+                >
+                  Bridge Out Assets
+                </span>
+                <span
+                  className={css({
+                    "@media (min-width: 769px)": {
+                      display: "none",
+                    },
+                  })}
+                >
+                  Bridge
+                </span>
               </span>
               <CheckCircleIcon size={16} />
             </div>
@@ -542,18 +758,22 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
         width: `min(34rem, 100dvw)`,
       })}
     >
-      <div className={css({
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.5rem",
-      })}>
-        {/* Step indicator */}
-        <div className={css({
+      <div
+        className={css({
           display: "flex",
-          justifyContent: "space-between",
-          position: "relative",
-          marginBottom: "1rem"
-        })}>
+          flexDirection: "column",
+          gap: "1.5rem",
+        })}
+      >
+        {/* Step indicator */}
+        <div
+          className={css({
+            display: "flex",
+            justifyContent: "space-between",
+            position: "relative",
+            marginBottom: "1rem",
+          })}
+        >
           {["select-asset", "enter-amount", "review"].map((stepName, index) => (
             <div
               key={stepName}
@@ -562,51 +782,78 @@ export function BridgeAssetsOutDialog({ daoId, onClose }: BridgeAssetsOutDialogP
                 flexDirection: "column",
                 alignItems: "center",
                 position: "relative",
-                zIndex: 1
+                zIndex: 1,
               })}
             >
-              <div className={css({
-                width: "2rem",
-                height: "2rem",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: step === stepName ? "primary" :
-                  (["select-asset", "enter-amount", "review"].indexOf(step) > index ? "primary" : "surface"),
-                color: step === stepName ? "onPrimary" :
-                  (["select-asset", "enter-amount", "review"].indexOf(step) > index ? "onPrimary" : "content"),
-                marginBottom: "0.5rem"
-              })}>
+              <div
+                className={css({
+                  width: "2rem",
+                  height: "2rem",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor:
+                    step === stepName
+                      ? "primary"
+                      : ["select-asset", "enter-amount", "review"].indexOf(
+                            step,
+                          ) > index
+                        ? "primary"
+                        : "surface",
+                  color:
+                    step === stepName
+                      ? "onPrimary"
+                      : ["select-asset", "enter-amount", "review"].indexOf(
+                            step,
+                          ) > index
+                        ? "onPrimary"
+                        : "content",
+                  marginBottom: "0.5rem",
+                })}
+              >
                 {index + 1}
               </div>
-              <span className={css({
-                fontSize: "0.8rem",
-                color: step === stepName ? "content" : "content.muted"
-              })}>
-                {stepName === "select-asset" ? "Select Asset" :
-                  stepName === "enter-amount" ? "Enter Details" : "Review"}
+              <span
+                className={css({
+                  fontSize: "0.8rem",
+                  color: step === stepName ? "content" : "content.muted",
+                })}
+              >
+                {stepName === "select-asset"
+                  ? "Select Asset"
+                  : stepName === "enter-amount"
+                    ? "Enter Details"
+                    : "Review"}
               </span>
             </div>
           ))}
 
           {/* Connecting line between steps */}
-          <div className={css({
-            position: "absolute",
-            top: "1rem",
-            left: "2.5rem",
-            right: "2.5rem",
-            height: "2px",
-            backgroundColor: "surface",
-            zIndex: 0
-          })}>
-            <div className={css({
-              height: "100%",
-              backgroundColor: "primary",
-              width: step === "select-asset" ? "0%" :
-                step === "enter-amount" ? "50%" : "100%",
-              transition: "width 0.3s ease-in-out"
-            })}></div>
+          <div
+            className={css({
+              position: "absolute",
+              top: "1rem",
+              left: "2.5rem",
+              right: "2.5rem",
+              height: "2px",
+              backgroundColor: "surface",
+              zIndex: 0,
+            })}
+          >
+            <div
+              className={css({
+                height: "100%",
+                backgroundColor: "primary",
+                width:
+                  step === "select-asset"
+                    ? "0%"
+                    : step === "enter-amount"
+                      ? "50%"
+                      : "100%",
+                transition: "width 0.3s ease-in-out",
+              })}
+            ></div>
           </div>
         </div>
 

@@ -34,5 +34,3 @@ export function useLazyLoadSelectedDaoId() {
 export function useSetSelectedDaoId() {
   return useSetAtom(selectedDaoIdAtom);
 }
-
-

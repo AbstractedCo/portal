@@ -1,10 +1,10 @@
 import { CircularProgressIndicator } from "./components/circular-progress-indicator";
+import { NotificationProvider } from "./contexts/notification-context";
 import "./index.css";
 import { routeTree } from "./routeTree.gen";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
-import { NotificationProvider } from "./contexts/notification-context";
 
 const router = createRouter({
   routeTree,
