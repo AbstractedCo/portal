@@ -154,7 +154,7 @@ export async function createAssetHubToInvArchTransfer(params: {
 
     // Construct the XCM message
     return {
-      V3: {
+      V4: {
         dest: {
           parents: 1,
           interior: {
