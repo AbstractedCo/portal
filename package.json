@@ -3,6 +3,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:debug": "tsx scripts/debug-server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "ladle": "ladle serve",
@@ -19,7 +20,6 @@
       "email": "franciscoannyon@gmail.com"
     },
     {
-      
       "name": "Tiến Nguyễn Khắc",
       "email": "tien.nguyenkhac@icloud.com"
     }

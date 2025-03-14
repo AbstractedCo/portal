@@ -1,3 +1,4 @@
+import { css } from "../../styled-system/css";
 import { ListItem } from "../components/list-item";
 import type { IdentityData } from "@polkadot-api/descriptors";
 import { idle } from "@reactive-dot/core";
@@ -7,27 +8,70 @@ import { Suspense } from "react";
 
 export type AccountListItemProps = {
   address: string;
-  name?: string | undefined;
+  name?: string;
 };
 
 export function AccountListItem({ address, name }: AccountListItemProps) {
   const shortenedAddress = address.slice(0, 4) + "..." + address.slice(-4);
 
   return (
-    <ListItem
-      headline={
-        <Suspense fallback={name ?? shortenedAddress}>
-          <OnChainName />
-        </Suspense>
-      }
-      supporting={shortenedAddress}
-      leading={
-        <PolkadotIdenticon
-          address={address}
-          backgroundColor="var(--colors-content)"
-        />
-      }
-    />
+    <div
+      className={css({
+        maxWidth: "100%",
+        overflow: "hidden",
+      })}
+    >
+      <ListItem
+        headline={
+          <Suspense
+            fallback={
+              <span
+                className={css({
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  display: "block",
+                  maxWidth: "100%",
+                })}
+              >
+                {name ?? shortenedAddress}
+              </span>
+            }
+          >
+            <span
+              className={css({
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "block",
+                maxWidth: "100%",
+              })}
+            >
+              <OnChainName />
+            </span>
+          </Suspense>
+        }
+        supporting={
+          <span
+            className={css({
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              display: "block",
+              maxWidth: "100%",
+            })}
+          >
+            {shortenedAddress}
+          </span>
+        }
+        leading={
+          <PolkadotIdenticon
+            address={address}
+            backgroundColor="var(--colors-content)"
+          />
+        }
+      />
+    </div>
   );
 
   function OnChainName() {

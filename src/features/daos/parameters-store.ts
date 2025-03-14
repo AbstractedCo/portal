@@ -1,8 +1,8 @@
-import { selectedDaoIdAtom } from './store'
-import { useLazyLoadQueryWithRefresh } from '@reactive-dot/react'
-import { useAtomValue } from 'jotai'
-import { idle } from '@reactive-dot/core'
-import { selectedAccountAtom } from '../accounts/store'
+import { selectedAccountAtom } from "../accounts/store";
+import { selectedDaoIdAtom } from "./store";
+import { idle } from "@reactive-dot/core";
+import { useLazyLoadQueryWithRefresh } from "@reactive-dot/react";
+import { useAtomValue } from "jotai";
 
 // interface DaoInfo {
 //     metadata: string
@@ -29,19 +29,18 @@ import { selectedAccountAtom } from '../accounts/store'
 // }
 
 export function useLazyLoadDaoInfo() {
-    const account = useAtomValue(selectedAccountAtom)
-    const selectedDaoId = useAtomValue(selectedDaoIdAtom)
+  const account = useAtomValue(selectedAccountAtom);
+  const selectedDaoId = useAtomValue(selectedDaoIdAtom);
 
-    const [daoInfo] = useLazyLoadQueryWithRefresh((builder) =>
-        account === undefined || selectedDaoId === undefined
-            ? undefined
-            : builder.readStorage('INV4', 'CoreStorage', [selectedDaoId])
-    )
+  const [daoInfo] = useLazyLoadQueryWithRefresh((builder) =>
+    account === undefined || selectedDaoId === undefined
+      ? undefined
+      : builder.readStorage("INV4", "CoreStorage", [selectedDaoId]),
+  );
 
-    if (!daoInfo || daoInfo === idle) {
-        return undefined
-    }
+  if (!daoInfo || daoInfo === idle) {
+    return undefined;
+  }
 
-    return daoInfo
+  return daoInfo;
 }
-

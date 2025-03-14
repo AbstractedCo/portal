@@ -1,5 +1,5 @@
-import { useLazyLoadQuery } from "@reactive-dot/react";
 import { css } from "../../../../styled-system/css";
+import { useLazyLoadQuery } from "@reactive-dot/react";
 import React from "react";
 
 type AccountVoteProps = {
@@ -8,7 +8,11 @@ type AccountVoteProps = {
   onBalanceLoad?: (balance: { free: bigint }) => void;
 };
 
-export function AccountVote({ daoId, address, onBalanceLoad }: AccountVoteProps) {
+export function AccountVote({
+  daoId,
+  address,
+  onBalanceLoad,
+}: AccountVoteProps) {
   const balance = useLazyLoadQuery((builder) =>
     builder.readStorage("CoreAssets", "Accounts", [address, daoId]),
   );
@@ -21,24 +25,31 @@ export function AccountVote({ daoId, address, onBalanceLoad }: AccountVoteProps)
     builder.readStorage("CoreAssets", "TotalIssuance", [daoId]),
   );
 
-  const percentage = totalTokens === 0n ? 0 : Number((balance.free * 100n) / totalTokens);
+  const percentage =
+    totalTokens === 0n ? 0 : Number((balance.free * 100n) / totalTokens);
 
   return (
     <>
-      <td className={css({
-        textAlign: "right",
-        padding: "1rem",
-        paddingRight: "2rem"
-      })}>
+      <td
+        className={css({
+          textAlign: "right",
+          padding: "1rem",
+          width: "120px",
+          maxWidth: "120px",
+        })}
+      >
         {balance.free.toLocaleString()}
       </td>
-      <td className={css({
-        textAlign: "right",
-        padding: "1rem",
-        paddingRight: "2rem"
-      })}>
+      <td
+        className={css({
+          textAlign: "right",
+          padding: "1rem",
+          width: "80px",
+          maxWidth: "80px",
+        })}
+      >
         {percentage.toFixed(2)}%
       </td>
     </>
   );
-} 
+}

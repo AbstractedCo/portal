@@ -250,9 +250,9 @@ function SuspendableCoreInfo({ daoId, className }: CoreInfoProps) {
     () =>
       request<{
         coreById:
-        | { totalRewards: string; totalUnclaimed: string }
-        | null
-        | undefined;
+          | { totalRewards: string; totalUnclaimed: string }
+          | null
+          | undefined;
       }>(
         "https://invarch.squids.live/ocif-squid-invarch/graphql",
         gql`
@@ -395,7 +395,7 @@ function SuspendableCoreInfo({ daoId, className }: CoreInfoProps) {
         eraInfo === undefined || coreStake === undefined
           ? 0
           : getNativeTokenAmount(coreStake.total).valueOf() /
-          getNativeTokenAmount(eraInfo.staked).valueOf()
+            getNativeTokenAmount(eraInfo.staked).valueOf()
       ).toLocaleString(undefined, {
         style: "percent",
         maximumFractionDigits: 2,
@@ -423,10 +423,7 @@ function SuspendableCoreInfo({ daoId, className }: CoreInfoProps) {
       );
 
       const coreStake = useLazyLoadQuery((builder) =>
-        builder.readStorage("OcifStaking", "CoreEraStake", [
-          daoId,
-          currentEra,
-        ]),
+        builder.readStorage("OcifStaking", "CoreEraStake", [daoId, currentEra]),
       );
 
       const coreTotalStake = useNativeTokenAmountFromPlanck(
