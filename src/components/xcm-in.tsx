@@ -534,7 +534,7 @@ export function BridgeAssetsInDialog({
         symbol: "VARCH",
         decimals: 12,
         name: "InvArch",
-        existential_deposit: 1000000000000n,
+        existential_deposit: 10_000_000_000n,
         location: undefined,
         additional: 0n,
       },

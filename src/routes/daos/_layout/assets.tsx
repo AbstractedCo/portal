@@ -6,16 +6,18 @@ import { TokenIcon } from "../../../components/token-icon";
 import { BridgeAssetsInDialog } from "../../../components/xcm-in";
 import { BridgeAssetsOutDialog } from "../../../components/xcm-out";
 import { useNotification } from "../../../contexts/notification-context";
+import { selectedAccountAtom } from "../../../features/accounts/store";
 import { useLazyLoadSelectedDaoId } from "../../../features/daos/store";
 import { MutationError, pending } from "@reactive-dot/core";
 import { useLazyLoadQuery } from "@reactive-dot/react";
 import { useMutation, useMutationEffect } from "@reactive-dot/react";
 import { BigIntMath, DenominatedNumber } from "@reactive-dot/utils";
 import { createFileRoute } from "@tanstack/react-router";
+import { useAtomValue } from "jotai";
 import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
 import { Binary } from "polkadot-api";
 import { QRCodeSVG } from "qrcode.react";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
@@ -78,7 +80,7 @@ function AssetsPage() {
           symbol: Binary.fromText("VARCH"),
           name: Binary.fromText("InvArch"),
           decimals: 12,
-          existential_deposit: 1000000000000000000000000n,
+          existential_deposit: 10_000_000_000n,
           location: undefined,
           additional: 0n,
         },
@@ -589,11 +591,129 @@ function TransferDialog({
   symbol: string;
   decimals: number;
   onClose: () => void;
-}) {
+}): JSX.Element {
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showEDConfirmation, setShowEDConfirmation] = useState(false);
+  const [isRemainderBelowED, setIsRemainderBelowED] = useState(false);
   const { showNotification } = useNotification();
+  const selectedAccount = useAtomValue(selectedAccountAtom);
+
+  type SystemAccount = {
+    nonce: number;
+    consumers: number;
+    providers: number;
+    sufficients: number;
+    data: { free: bigint; reserved: bigint; frozen: bigint; flags: bigint };
+  };
+
+  type TokenAccount = {
+    free: bigint;
+    reserved: bigint;
+    frozen: bigint;
+  };
+
+  // Get the DAO's token balance
+  const coreStorage = useLazyLoadQuery((builder) =>
+    builder.readStorage("INV4", "CoreStorage", [daoId]),
+  );
+
+  // Update the balance query to handle both native and non-native tokens
+  const daoTokenBalance = useLazyLoadQuery((builder) => {
+    if (!coreStorage?.account) return null;
+
+    // For native token (VARCH)
+    if (tokenId === 0) {
+      return builder.readStorage("System", "Account", [coreStorage.account]);
+    }
+
+    // For other tokens
+    return builder.readStorage("Tokens", "Accounts", [
+      coreStorage.account,
+      tokenId,
+    ]);
+  });
+
+  // Constants for VARCH token
+  const VARCH_EXISTENTIAL_DEPOSIT = 10_000_000_000n;
+  const VARCH_BUFFER = VARCH_EXISTENTIAL_DEPOSIT * 2n; // 2x existential deposit for better safety margin
+
+  // Get the free balance based on token type
+  const getFreeBalance = () => {
+    if (!daoTokenBalance) return 0n;
+
+    // For native token (VARCH)
+    if (tokenId === 0) {
+      return (daoTokenBalance as SystemAccount).data.free;
+    }
+
+    // For other tokens
+    return (daoTokenBalance as TokenAccount).free;
+  };
+
+  // Calculate max amount considering existential deposit only for VARCH
+  const maxAmount = useMemo(() => {
+    const freeBalance = getFreeBalance();
+
+    // For VARCH, consider existential deposit and buffer
+    if (tokenId === 0) {
+      const minimumRequired = VARCH_EXISTENTIAL_DEPOSIT + VARCH_BUFFER;
+      if (freeBalance <= minimumRequired) return "0";
+      const safeMaximum = freeBalance - minimumRequired;
+      // Return the raw number string without formatting
+      return (Number(safeMaximum) / Math.pow(10, decimals)).toString();
+    }
+
+    // For other tokens, use full free balance without formatting
+    return (Number(freeBalance) / Math.pow(10, decimals)).toString();
+  }, [daoTokenBalance, tokenId, decimals]);
+
+  // Format balance for display separately
+  const formattedBalance = useMemo(() => {
+    const freeBalance = getFreeBalance();
+    return new DenominatedNumber(freeBalance, decimals).toLocaleString();
+  }, [daoTokenBalance, decimals]);
+
+  // Check for existential deposit issues only for VARCH
+  useEffect(() => {
+    if (tokenId === 0 && amount) {
+      const freeBalance = getFreeBalance();
+      const amountBigInt = BigInt(
+        Math.floor(parseFloat(amount) * Math.pow(10, decimals)),
+      );
+      const remainder = freeBalance - amountBigInt;
+
+      if (remainder < VARCH_EXISTENTIAL_DEPOSIT + VARCH_BUFFER) {
+        setIsRemainderBelowED(true);
+      } else {
+        setIsRemainderBelowED(false);
+      }
+    }
+  }, [amount, daoTokenBalance, tokenId, decimals, setIsRemainderBelowED]);
+
+  // Handle form submission with existential deposit check for VARCH
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    // Check if amount would leave balance below existential deposit - only for VARCH
+    if (tokenId === 0 && isRemainderBelowED && !showEDConfirmation) {
+      setShowEDConfirmation(true);
+      return;
+    }
+
+    try {
+      await transfer();
+    } catch (error) {
+      console.error("Failed to transfer:", error);
+      showNotification({
+        variant: "error",
+        message:
+          "Failed to transfer: " +
+          (error instanceof Error ? error.message : "Unknown error"),
+      });
+    }
+  };
 
   const [_transferState, transfer] = useMutation((tx) => {
     // Convert amount to proper decimals
@@ -660,21 +780,6 @@ function TransferDialog({
     }
   });
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    try {
-      await transfer();
-    } catch (error) {
-      console.error("Failed to transfer:", error);
-      showNotification({
-        variant: "error",
-        message:
-          "Failed to transfer: " +
-          (error instanceof Error ? error.message : "Unknown error"),
-      });
-    }
-  };
-
   return (
     <ModalDialog
       title={
@@ -700,54 +805,299 @@ function TransferDialog({
         className={css({
           display: "flex",
           flexDirection: "column",
-          gap: "1.5rem",
-          alignItems: "center",
-          textAlign: "center",
-          "& > *": {
-            width: "100%",
-          },
+          gap: "2rem",
+          width: "100%",
         })}
       >
-        <TextInput
-          label="Recipient Address"
-          value={address}
-          onChangeValue={setAddress}
-          placeholder="Enter recipient address"
-        />
-        <TextInput
-          label={
-            <div
+        <div
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+            width: "100%",
+          })}
+        >
+          <span
+            className={css({
+              fontSize: "1.125rem",
+              color: "content",
+              fontWeight: "400",
+            })}
+          >
+            Amount ({symbol})
+          </span>
+          <TextInput
+            value={amount}
+            onChangeValue={(value) => {
+              const regex = new RegExp(`^\\d*\\.?\\d{0,${decimals}}$`);
+              if (value === "" || regex.test(value)) {
+                setAmount(value);
+              }
+            }}
+            placeholder={`Enter amount in ${symbol}`}
+            className={css({
+              width: "100%",
+              "& input": {
+                width: "100%",
+                backgroundColor: "surfaceContainerHigh",
+                border: "none",
+                borderRadius: "md",
+                padding: "1rem",
+                fontSize: "1rem",
+                color: "content",
+              },
+            })}
+          />
+
+          <div
+            className={css({
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "0.875rem",
+              color: "content.muted",
+              marginTop: "0.25rem",
+            })}
+          >
+            <span>
+              Available balance: {formattedBalance} {symbol}
+            </span>
+            <button
+              type="button"
+              onClick={() => setAmount(maxAmount)}
               className={css({
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
+                background: "none",
+                border: "none",
+                color: "primary",
+                cursor: "pointer",
+                padding: "0",
+                fontSize: "0.875rem",
+                textDecoration: "underline",
+                "&:hover": {
+                  textDecoration: "none",
+                },
               })}
             >
-              <TokenIcon symbol={symbol} size="sm" />
-              <span>Amount ({symbol})</span>
+              Use safe max
+            </button>
+          </div>
+
+          {/* Only show ED warning for VARCH */}
+          {tokenId === 0 && isRemainderBelowED && (
+            <div
+              className={css({
+                backgroundColor: "warningContainer",
+                color: "onWarningContainer",
+                padding: "0.75rem 1rem",
+                borderRadius: "md",
+                fontSize: "0.875rem",
+                marginTop: "0.5rem",
+              })}
+            >
+              <p>
+                <strong>Warning:</strong> The remaining balance would be less
+                than the recommended minimum (
+                {new DenominatedNumber(VARCH_BUFFER, decimals).toLocaleString()}{" "}
+                {symbol}
+                ). This includes the existential deposit plus a small buffer for
+                fees.
+              </p>
+              <button
+                type="button"
+                onClick={() => setAmount(maxAmount)}
+                className={css({
+                  background: "none",
+                  border: "none",
+                  color: "onWarningContainer",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  padding: "0.5rem 0 0 0",
+                  fontSize: "0.85rem",
+                  textDecoration: "underline",
+                  "&:hover": {
+                    textDecoration: "none",
+                  },
+                })}
+              >
+                Use safe max
+              </button>
             </div>
-          }
-          value={amount}
-          onChangeValue={(value) => {
-            // Allow decimal points and numbers
-            const regex = new RegExp(`^\\d*\\.?\\d{0,${decimals}}$`);
-            if (value === "" || regex.test(value)) {
-              setAmount(value);
-            }
-          }}
-          placeholder={`Enter amount in ${symbol}`}
-        />
+          )}
+        </div>
+
+        <div
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+            width: "100%",
+          })}
+        >
+          <span
+            className={css({
+              fontSize: "1.125rem",
+              color: "content",
+              fontWeight: "400",
+            })}
+          >
+            Recipient Address
+          </span>
+          <TextInput
+            value={address}
+            onChangeValue={setAddress}
+            placeholder="Enter recipient address"
+            className={css({
+              width: "100%",
+              "& input": {
+                width: "100%",
+                backgroundColor: "surfaceContainerHigh",
+                border: "none",
+                borderRadius: "md",
+                padding: "1rem",
+                fontSize: "1rem",
+                color: "content",
+              },
+            })}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedAccount?.address) {
+                setAddress(selectedAccount.address);
+              } else {
+                showNotification({
+                  variant: "error",
+                  message:
+                    "No account selected. Please select an account first.",
+                });
+              }
+            }}
+            className={css({
+              background: "none",
+              border: "none",
+              padding: "0",
+              color: "primary",
+              fontSize: "0.875rem",
+              cursor: "pointer",
+              transition: "opacity 0.2s ease",
+              userSelect: "none",
+              width: "fit-content",
+              "&:hover": {
+                opacity: 0.8,
+              },
+            })}
+          >
+            Use my account
+          </button>
+        </div>
 
         <Button
           type="submit"
           disabled={!address || !amount || isProcessing}
           className={css({
+            width: "100%",
+            backgroundColor: "primary",
+            color: "onPrimary",
+            padding: "1rem",
+            borderRadius: "md",
+            fontSize: "1rem",
+            fontWeight: "500",
             marginTop: "1rem",
           })}
         >
           {isProcessing ? "Processing..." : "Transfer"}
         </Button>
       </form>
+
+      {/* Only show ED Confirmation Dialog for VARCH */}
+      {tokenId === 0 && showEDConfirmation && (
+        <ModalDialog
+          title="Confirm Transaction"
+          onClose={() => setShowEDConfirmation(false)}
+          className={css({
+            containerType: "inline-size",
+            width: `min(34rem, 100dvw)`,
+          })}
+        >
+          <div
+            className={css({
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.5rem",
+              alignItems: "center",
+              textAlign: "center",
+            })}
+          >
+            <p
+              className={css({
+                color: "warning",
+                fontSize: "1rem",
+                lineHeight: "1.5",
+              })}
+            >
+              You are about to leave a balance below the recommended minimum (
+              {new DenominatedNumber(VARCH_BUFFER, decimals).toLocaleString()}{" "}
+              {symbol}
+              ).
+              <br />
+              <br />
+              This includes the existential deposit plus a buffer for
+              transaction fees. The remaining funds may be unusable for future
+              transactions.
+              <br />
+              <br />
+              Are you sure you want to proceed?
+            </p>
+            <div
+              className={css({
+                display: "flex",
+                gap: "1rem",
+                width: "100%",
+                justifyContent: "center",
+              })}
+            >
+              <Button
+                onClick={() => {
+                  setShowEDConfirmation(false);
+                }}
+                className={css({
+                  backgroundColor: "surface",
+                  color: "onSurface",
+                })}
+              >
+                No, let me adjust
+              </Button>
+              <Button
+                onClick={async () => {
+                  setShowEDConfirmation(false);
+                  await transfer();
+                }}
+                className={css({
+                  backgroundColor: "warning",
+                  color: "black",
+                  "&:hover": {
+                    backgroundColor: "warningHover",
+                  },
+                })}
+              >
+                Yes, proceed anyway
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowEDConfirmation(false);
+                  setAmount(maxAmount);
+                }}
+                className={css({
+                  backgroundColor: "primary",
+                  color: "onPrimary",
+                })}
+              >
+                Use max amount
+              </Button>
+            </div>
+          </div>
+        </ModalDialog>
+      )}
     </ModalDialog>
   );
 }

@@ -220,7 +220,7 @@ export function isAssetFromAssetHub(
 export function getXcmTransferWeight() {
   return {
     type: "Limited",
-    value: BigInt(1_000_000_000), // Default weight, can be adjusted based on requirements
+    value: BigInt(10_000_000_000), // Default weight, can be adjusted based on requirements
   };
 }
 

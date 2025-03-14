@@ -25,7 +25,7 @@ export function useLazyLoadRegisteredAssets() {
       symbol: "VARCH",
       name: "InvArch",
       decimals: 12,
-      existential_deposit: 1000000000000000000000000n,
+      existential_deposit: 10_000_000_000n,
       location: undefined,
       additional: 0n,
     },
