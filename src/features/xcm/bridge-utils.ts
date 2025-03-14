@@ -135,7 +135,7 @@ export function useAssetHubBridgeInOperation(params?: BridgeParams) {
   // Set up the mutation
   const [_, execute] = useMutation(
     (builder) => {
-      if (!beneficiaryAccount || !amount) {
+      if (!beneficiaryAccount || !amount || assetLocation === undefined) {
         throw new Error("Missing required parameters for bridge operation");
       }
 
@@ -249,7 +249,7 @@ export function useAssetHubBridgeInOperation(params?: BridgeParams) {
 
   // Function to execute the bridge operation
   const executeBridge = async () => {
-    if (!beneficiaryAccount || !amount) {
+    if (!beneficiaryAccount || !amount || assetLocation === undefined) {
       throw new Error("Missing required parameters for bridge operation");
     }
 
@@ -311,6 +311,10 @@ export function useInvArchBridgeOutOperation(
     (builder) => {
       if (!destinationAccount || !amount || !assetId || daoId === undefined) {
         throw new Error("Missing required parameters for bridge out operation");
+      }
+
+      if (typeof assetId !== "number" && typeof assetId !== "bigint") {
+        throw new Error("Invalid asset ID type");
       }
 
       // Create the xTokens.transfer call that will be executed by the DAO
@@ -483,6 +487,7 @@ export function getBridgeSourceChain(
     return "polkadot_asset_hub";
   }
 
+  console.warn("Unexpected asset location structure:", location);
   return undefined;
 }
 

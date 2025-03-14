@@ -87,31 +87,39 @@ export function BridgeAssetsInDialog({
   const getAssetId = () => {
     if (!selectedAsset) return undefined;
 
-    console.log("Getting asset ID for:", selectedAsset);
+    try {
+      console.log("Getting asset ID for:", selectedAsset);
 
-    // For native tokens like DOT, use the asset ID directly
-    if (
-      selectedAsset.metadata.location &&
-      isNativeToken(selectedAsset.metadata.location)
-    ) {
-      // Ensure the ID is a valid number before converting to BigInt
-      if (typeof selectedAsset.id === "number" && !isNaN(selectedAsset.id)) {
-        console.log("Converting native token ID to BigInt:", selectedAsset.id);
-        return BigInt(selectedAsset.id);
+      // For native tokens like DOT, use the asset ID directly
+      if (
+        selectedAsset.metadata.location &&
+        isNativeToken(selectedAsset.metadata.location)
+      ) {
+        // Ensure the ID is a valid number before converting to BigInt
+        if (typeof selectedAsset.id === "number" && !isNaN(selectedAsset.id)) {
+          console.log(
+            "Converting native token ID to BigInt:",
+            selectedAsset.id,
+          );
+          return BigInt(selectedAsset.id);
+        }
+        console.log("Invalid native token ID:", selectedAsset.id);
+        return undefined;
       }
-      console.log("Invalid native token ID:", selectedAsset.id);
+
+      // For other assets, get the ID from the location
+      if (selectedAsset.metadata.location) {
+        const assetHubId = getAssetHubId(selectedAsset.metadata.location);
+        console.log("Asset Hub ID from location:", assetHubId);
+        return assetHubId;
+      }
+
+      console.log("No valid location found for asset ID");
+      return undefined;
+    } catch (error) {
+      console.warn("Error getting asset ID:", error);
       return undefined;
     }
-
-    // For other assets, get the ID from the location
-    if (selectedAsset.metadata.location) {
-      const assetHubId = getAssetHubId(selectedAsset.metadata.location);
-      console.log("Asset Hub ID from location:", assetHubId);
-      return assetHubId;
-    }
-
-    console.log("No valid location found for asset ID");
-    return undefined;
   };
 
   // Convert amount to proper decimals
@@ -390,9 +398,15 @@ export function BridgeAssetsInDialog({
   // Filter assets to only show those with supported bridges
   const getFilteredAssets = () => {
     return registeredAssets.filter((asset) => {
-      if (!asset.metadata.location) return false;
-      // Check if we have a bridge implementation for this asset location
-      return isBridgeSupportedIn(asset.metadata.location);
+      try {
+        // Only include assets that have location and supported bridge
+        if (!asset.metadata.location) return false;
+        return isBridgeSupportedIn(asset.metadata.location);
+      } catch (error) {
+        // If there's any error in checking bridge support, exclude the asset
+        console.warn("Error checking bridge support for asset:", asset, error);
+        return false;
+      }
     });
   };
 
@@ -400,60 +414,65 @@ export function BridgeAssetsInDialog({
   const getFormattedBalance = () => {
     if (!selectedAsset) return "Loading...";
 
-    // For native VARCH token
-    if (selectedAsset.isNativeVarch) {
+    try {
+      // For native VARCH token
+      if (selectedAsset.isNativeVarch) {
+        if (
+          nativeBalance &&
+          typeof nativeBalance === "object" &&
+          "data" in nativeBalance &&
+          nativeBalance.data
+        ) {
+          return (
+            new DenominatedNumber(
+              nativeBalance.data.free || 0n,
+              selectedAsset.metadata.decimals,
+            ).toLocaleString() +
+            " " +
+            selectedAsset.metadata.symbol
+          );
+        }
+        return "Loading...";
+      }
+
+      // For other assets, use the existing code
+      if (!assetHubBalance) return "Loading...";
+
+      // For native tokens (like DOT)
       if (
-        nativeBalance &&
-        typeof nativeBalance === "object" &&
-        "data" in nativeBalance &&
-        nativeBalance.data
+        selectedAsset.metadata.location &&
+        isNativeToken(selectedAsset.metadata.location)
       ) {
+        if (typeof assetHubBalance === "object" && "data" in assetHubBalance) {
+          const freeBalance = assetHubBalance.data?.free || 0n;
+          return (
+            new DenominatedNumber(
+              freeBalance,
+              selectedAsset.metadata.decimals,
+            ).toLocaleString() +
+            " " +
+            selectedAsset.metadata.symbol
+          );
+        }
+      }
+
+      // For other assets
+      if (typeof assetHubBalance === "object" && "balance" in assetHubBalance) {
         return (
           new DenominatedNumber(
-            nativeBalance.data.free || 0n,
+            assetHubBalance.balance ?? 0n,
             selectedAsset.metadata.decimals,
           ).toLocaleString() +
           " " +
           selectedAsset.metadata.symbol
         );
       }
+
       return "Loading...";
+    } catch (error) {
+      console.warn("Error formatting balance:", error);
+      return "Error loading balance";
     }
-
-    // For other assets, use the existing code
-    if (!assetHubBalance) return "Loading...";
-
-    // For native tokens (like DOT)
-    if (
-      selectedAsset.metadata.location &&
-      isNativeToken(selectedAsset.metadata.location)
-    ) {
-      if (typeof assetHubBalance === "object" && "data" in assetHubBalance) {
-        const freeBalance = assetHubBalance.data?.free || 0n;
-        return (
-          new DenominatedNumber(
-            freeBalance,
-            selectedAsset.metadata.decimals,
-          ).toLocaleString() +
-          " " +
-          selectedAsset.metadata.symbol
-        );
-      }
-    }
-
-    // For other assets
-    if (typeof assetHubBalance === "object" && "balance" in assetHubBalance) {
-      return (
-        new DenominatedNumber(
-          assetHubBalance.balance ?? 0n,
-          selectedAsset.metadata.decimals,
-        ).toLocaleString() +
-        " " +
-        selectedAsset.metadata.symbol
-      );
-    }
-
-    return "Loading...";
   };
 
   // Determine if we can proceed based on current step
@@ -871,7 +890,6 @@ export function BridgeAssetsInDialog({
                     Available balance:{" "}
                     {selectedAsset ? getFormattedBalance() : "Select an asset"}{" "}
                     on {selectedAsset?.isNativeVarch ? "InvArch" : "Asset Hub"}
-                    {selectedAsset ? getFormattedBalance() : "Select an asset"}
                   </p>
                   {selectedAsset && (
                     <p

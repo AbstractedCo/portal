@@ -149,26 +149,104 @@ export function BridgeAssetsOutDialog({
     [assetMetadataResult],
   );
 
+  // Combine tokens with their metadata
+  const getAvailableAssets = (): Asset[] => {
+    if (!daoTokens || !assetMetadata) return [];
+
+    const assets: Asset[] = [];
+
+    for (let i = 0; i < daoTokens.length; i++) {
+      try {
+        if (!daoTokens[i] || !assetMetadata[i]) continue;
+
+        // Explicitly check for token properties to satisfy TypeScript
+        const token = daoTokens[i];
+        if (!token || !token.keyArgs || !token.value) continue;
+
+        // Explicitly check for metadata properties to satisfy TypeScript
+        const metadata = assetMetadata[i];
+        if (
+          !metadata ||
+          metadata.symbol === undefined ||
+          metadata.decimals === undefined ||
+          metadata.name === undefined ||
+          metadata.existential_deposit === undefined
+        )
+          continue;
+
+        // Only include assets that have bridge support
+        try {
+          if (!isBridgeSupportedOut(token.keyArgs[1])) continue;
+        } catch (error) {
+          console.warn(
+            "Error checking bridge support for token:",
+            token,
+            error,
+          );
+          continue;
+        }
+
+        assets.push({
+          id: token.keyArgs[1],
+          value: token.value,
+          metadata: {
+            symbol: metadata.symbol.asText(),
+            decimals: metadata.decimals,
+            name: metadata.name.asText(),
+            existential_deposit: metadata.existential_deposit,
+          },
+        });
+      } catch (error) {
+        console.warn("Error processing token:", daoTokens[i], error);
+        continue;
+      }
+    }
+
+    return assets;
+  };
+
+  // Get formatted balance for display
+  const getFormattedBalance = () => {
+    try {
+      if (!selectedAsset || !daoTokens) return "Loading...";
+
+      const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
+      if (!token || !token.value || !token.value.free) return "Loading...";
+
+      return (
+        new DenominatedNumber(
+          token.value.free,
+          selectedAsset.metadata.decimals,
+        ).toLocaleString() +
+        " " +
+        selectedAsset.metadata.symbol
+      );
+    } catch (error) {
+      console.warn("Error formatting balance:", error);
+      return "Error loading balance";
+    }
+  };
+
   // Convert amount to proper decimals
   const getRawAmount = () => {
-    if (!amount || !selectedAsset) {
-      console.log("Missing amount or asset for conversion:", {
-        amount,
-        asset: selectedAsset?.id,
-      });
-      return undefined;
-    }
-
-    // Parse the amount to a float, ensuring it's a valid number
-    const parsedAmount = parseFloat(amount);
-    console.log("Parsed amount:", parsedAmount);
-
-    if (isNaN(parsedAmount)) {
-      console.log("Amount is not a valid number:", amount);
-      return undefined;
-    }
-
     try {
+      if (!amount || !selectedAsset) {
+        console.log("Missing amount or asset for conversion:", {
+          amount,
+          asset: selectedAsset?.id,
+        });
+        return undefined;
+      }
+
+      // Parse the amount to a float, ensuring it's a valid number
+      const parsedAmount = parseFloat(amount);
+      console.log("Parsed amount:", parsedAmount);
+
+      if (isNaN(parsedAmount)) {
+        console.log("Amount is not a valid number:", amount);
+        return undefined;
+      }
+
       // Use Math.round instead of Math.floor to avoid potential precision issues
       const decimals = selectedAsset.metadata.decimals;
       console.log("Using decimals:", decimals);
@@ -297,64 +375,6 @@ export function BridgeAssetsOutDialog({
       });
       setIsProcessing(false);
     }
-  };
-
-  // Combine tokens with their metadata
-  const getAvailableAssets = (): Asset[] => {
-    if (!daoTokens || !assetMetadata) return [];
-
-    const assets: Asset[] = [];
-
-    for (let i = 0; i < daoTokens.length; i++) {
-      if (!daoTokens[i] || !assetMetadata[i]) continue;
-
-      // Explicitly check for token properties to satisfy TypeScript
-      const token = daoTokens[i];
-      if (!token || !token.keyArgs || !token.value) continue;
-
-      // Explicitly check for metadata properties to satisfy TypeScript
-      const metadata = assetMetadata[i];
-      if (
-        !metadata ||
-        metadata.symbol === undefined ||
-        metadata.decimals === undefined ||
-        metadata.name === undefined ||
-        metadata.existential_deposit === undefined
-      )
-        continue;
-
-      if (!isBridgeSupportedOut(token.keyArgs[1])) continue;
-
-      assets.push({
-        id: token.keyArgs[1],
-        value: token.value,
-        metadata: {
-          symbol: metadata.symbol.asText(),
-          decimals: metadata.decimals,
-          name: metadata.name.asText(),
-          existential_deposit: metadata.existential_deposit,
-        },
-      });
-    }
-
-    return assets;
-  };
-
-  // Get formatted balance for display
-  const getFormattedBalance = () => {
-    if (!selectedAsset || !daoTokens) return "Loading...";
-
-    const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
-    if (!token || !token.value || !token.value.free) return "Loading...";
-
-    return (
-      new DenominatedNumber(
-        token.value.free,
-        selectedAsset.metadata.decimals,
-      ).toLocaleString() +
-      " " +
-      selectedAsset.metadata.symbol
-    );
   };
 
   // Determine if we can proceed based on current step
@@ -580,7 +600,7 @@ export function BridgeAssetsOutDialog({
                         >
                           {iconPath && (
                             <img
-                              src={iconPath}
+                              src={iconPath || ""}
                               alt={`${asset.metadata.symbol} icon`}
                               className={css({
                                 width: "1.5rem",
@@ -649,23 +669,10 @@ export function BridgeAssetsOutDialog({
               })}
             >
               {selectedAsset && (
-                <>
-                  {getTokenIcon(selectedAsset.metadata.symbol) && (
-                    <img
-                      src={getTokenIcon(selectedAsset.metadata.symbol) || ""}
-                      alt={`${selectedAsset.metadata.symbol} icon`}
-                      className={css({
-                        width: "1.5rem",
-                        height: "1.5rem",
-                        objectFit: "contain",
-                      })}
-                    />
-                  )}
-                  <p>
-                    Enter the amount of {selectedAsset.metadata.symbol} to
-                    bridge from the DAO to {destinationChain}
-                  </p>
-                </>
+                <p>
+                  Enter the amount of {selectedAsset.metadata.symbol} to bridge
+                  from the DAO to {destinationChain}
+                </p>
               )}
             </div>
             <TextInput
@@ -1076,7 +1083,28 @@ export function BridgeAssetsOutDialog({
   // Main component render
   return (
     <ModalDialog
-      title="Bridge Your Assets Out of DAO"
+      title={
+        <div
+          className={css({
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+          })}
+        >
+          {selectedAsset && getTokenIcon(selectedAsset.metadata.symbol) && (
+            <img
+              src={getTokenIcon(selectedAsset.metadata.symbol) || ""}
+              alt={`${selectedAsset.metadata.symbol} icon`}
+              className={css({
+                width: "1.5rem",
+                height: "1.5rem",
+                objectFit: "contain",
+              })}
+            />
+          )}
+          <span>Bridge Your Assets Out of DAO</span>
+        </div>
+      }
       onClose={onClose}
       className={css({
         containerType: "inline-size",
