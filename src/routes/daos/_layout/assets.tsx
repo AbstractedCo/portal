@@ -2,6 +2,7 @@ import { css } from "../../../../styled-system/css";
 import { Button } from "../../../components/button";
 import { ModalDialog } from "../../../components/modal-dialog";
 import { TextInput } from "../../../components/text-input";
+import { TokenIcon } from "../../../components/token-icon";
 import { BridgeAssetsInDialog } from "../../../components/xcm-in";
 import { BridgeAssetsOutDialog } from "../../../components/xcm-out";
 import { useNotification } from "../../../contexts/notification-context";
@@ -15,24 +16,6 @@ import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
 import { Binary } from "polkadot-api";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
-
-// Helper function to get the appropriate icon for a token
-const getTokenIcon = (symbol: string) => {
-  const normalizedSymbol = symbol.toUpperCase();
-  
-  switch (normalizedSymbol) {
-    case 'DOT':
-      return '/polkadot-new-dot-logo.svg';
-    case 'USDT':
-      return '/tether-usdt-logo.svg';
-    case 'USDC':
-      return '/usd-coin-usdc-logo.svg';
-    case 'VARCH':
-      return '/invarch-logo.svg';
-    default:
-      return null;
-  }
-};
 
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
@@ -263,8 +246,7 @@ function AssetsPage() {
             <tbody>
               {tokens.map((token) => {
                 const symbol = token.metadata.symbol.asText();
-                const iconPath = getTokenIcon(symbol);
-                
+
                 return (
                   <tr key={token.id}>
                     <td
@@ -273,22 +255,14 @@ function AssetsPage() {
                         padding: "1rem",
                       })}
                     >
-                      <div className={css({
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.75rem",
-                      })}>
-                        {iconPath && (
-                          <img 
-                            src={iconPath} 
-                            alt={`${symbol} icon`} 
-                            className={css({
-                              width: "1.5rem",
-                              height: "1.5rem",
-                              objectFit: "contain",
-                            })} 
-                          />
-                        )}
+                      <div
+                        className={css({
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                        })}
+                      >
+                        <TokenIcon symbol={symbol} size="md" />
                         <span>{symbol}</span>
                       </div>
                     </td>
@@ -538,9 +512,8 @@ function TransferAssetsDialog({
                 token.value.free -
                   BigIntMath.max(token.value.frozen - token.value.reserved, 0n),
               );
-              
+
               const symbol = token.metadata.symbol.asText();
-              const iconPath = getTokenIcon(symbol);
 
               return (
                 <button
@@ -563,22 +536,14 @@ function TransferAssetsDialog({
                     },
                   })}
                 >
-                  <div className={css({
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                  })}>
-                    {iconPath && (
-                      <img 
-                        src={iconPath} 
-                        alt={`${symbol} icon`} 
-                        className={css({
-                          width: "1.5rem",
-                          height: "1.5rem",
-                          objectFit: "contain",
-                        })} 
-                      />
-                    )}
+                  <div
+                    className={css({
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                    })}
+                  >
+                    <TokenIcon symbol={symbol} size="md" />
                     <span>{symbol}</span>
                   </div>
                   <span>
@@ -629,9 +594,6 @@ function TransferDialog({
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const { showNotification } = useNotification();
-  
-  // Get the icon for the token
-  const iconPath = getTokenIcon(symbol);
 
   const [_transferState, transfer] = useMutation((tx) => {
     // Convert amount to proper decimals
@@ -716,22 +678,14 @@ function TransferDialog({
   return (
     <ModalDialog
       title={
-        <div className={css({
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-        })}>
-          {iconPath && (
-            <img 
-              src={iconPath} 
-              alt={`${symbol} icon`} 
-              className={css({
-                width: "1.5rem",
-                height: "1.5rem",
-                objectFit: "contain",
-              })} 
-            />
-          )}
+        <div
+          className={css({
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+          })}
+        >
+          <TokenIcon symbol={symbol} size="md" />
           <span>Transfer {symbol}</span>
         </div>
       }
@@ -762,22 +716,14 @@ function TransferDialog({
         />
         <TextInput
           label={
-            <div className={css({
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            })}>
-              {iconPath && (
-                <img 
-                  src={iconPath} 
-                  alt={`${symbol} icon`} 
-                  className={css({
-                    width: "1rem",
-                    height: "1rem",
-                    objectFit: "contain",
-                  })} 
-                />
-              )}
+            <div
+              className={css({
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              })}
+            >
+              <TokenIcon symbol={symbol} size="sm" />
               <span>Amount ({symbol})</span>
             </div>
           }

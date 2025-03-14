@@ -19,21 +19,21 @@ import { useMutation, useMutationEffect } from "@reactive-dot/react";
 import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // Helper function to get the appropriate icon for a token
 const getTokenIcon = (symbol: string) => {
   const normalizedSymbol = symbol.toUpperCase();
-  
+
   switch (normalizedSymbol) {
-    case 'DOT':
-      return '/polkadot-new-dot-logo.svg';
-    case 'USDT':
-      return '/tether-usdt-logo.svg';
-    case 'USDC':
-      return '/usd-coin-usdc-logo.svg';
-    case 'VARCH':
-      return '/invarch-logo.svg';
+    case "DOT":
+      return "/polkadot-new-dot-logo.svg";
+    case "USDT":
+      return "/tether-usdt-logo.svg";
+    case "USDC":
+      return "/usd-coin-usdc-logo.svg";
+    case "VARCH":
+      return "/invarch-logo.svg";
     default:
       return null;
   }
@@ -66,6 +66,7 @@ export function BridgeAssetsInDialog({
   const [step, setStep] = useState<"select-asset" | "enter-amount" | "review">(
     "select-asset",
   );
+  const [showEDConfirmation, setShowEDConfirmation] = useState(false);
   const { showNotification } = useNotification();
   const registeredAssets = useLazyLoadRegisteredAssets();
   const selectedAccount = useAtomValue(selectedAccountAtom);
@@ -462,11 +463,50 @@ export function BridgeAssetsInDialog({
     return true;
   };
 
-  // Handle moving to the next step
+  // Add new state variables for existential deposit check
+  const [isRemainderBelowED, setIsRemainderBelowED] = useState(false);
+
+  // Add effect to check for existential deposit issues
+  useEffect(() => {
+    if (step === "enter-amount" && selectedAsset) {
+      if (amount) {
+        const amountValue = parseFloat(amount) || 0;
+
+        // Create a proper DenominatedNumber for the existential deposit
+        const edDenominated = new DenominatedNumber(
+          selectedAsset.metadata.existential_deposit,
+          selectedAsset.metadata.decimals,
+        );
+
+        // Get the formatted existential deposit value
+        const existentialDepositValue = parseFloat(
+          edDenominated.toLocaleString(),
+        );
+
+        // For bridge in, we only need to check if the amount is below ED
+        setIsRemainderBelowED(
+          amountValue > 0 && amountValue < existentialDepositValue,
+        );
+      } else {
+        setIsRemainderBelowED(false);
+      }
+    }
+  }, [step, selectedAsset, amount]);
+
+  // Modify handleNextStep to include ED check
   const handleNextStep = () => {
     if (step === "select-asset" && selectedAsset) {
       setStep("enter-amount");
     } else if (step === "enter-amount" && amount) {
+      // Check if amount is below existential deposit
+      if (isRemainderBelowED && !showEDConfirmation) {
+        // Show confirmation dialog instead of proceeding
+        setShowEDConfirmation(true);
+        return;
+      }
+
+      // Reset the confirmation dialog when moving to review step
+      setShowEDConfirmation(false);
       setStep("review");
     }
   };
@@ -474,6 +514,8 @@ export function BridgeAssetsInDialog({
   // Handle going back to the previous step
   const handleBackStep = () => {
     if (step === "enter-amount") {
+      // Reset the confirmation dialog when going back
+      setShowEDConfirmation(false);
       setStep("select-asset");
     } else if (step === "review") {
       setStep("enter-amount");
@@ -573,19 +615,21 @@ export function BridgeAssetsInDialog({
                     },
                   })}
                 >
-                  <div className={css({
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                  })}>
-                    <img 
-                      src="/invarch-logo.svg" 
-                      alt="VARCH icon" 
+                  <div
+                    className={css({
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                    })}
+                  >
+                    <img
+                      src="/invarch-logo.svg"
+                      alt="VARCH icon"
                       className={css({
                         width: "1.5rem",
                         height: "1.5rem",
                         objectFit: "contain",
-                      })} 
+                      })}
                     />
                     <span className={css({ fontWeight: "500" })}>VARCH</span>
                   </div>
@@ -625,7 +669,7 @@ export function BridgeAssetsInDialog({
                   >
                     {filteredAssets.map((asset) => {
                       const iconPath = getTokenIcon(asset.metadata.symbol);
-                      
+
                       return (
                         <button
                           key={asset.id}
@@ -655,20 +699,22 @@ export function BridgeAssetsInDialog({
                             },
                           })}
                         >
-                          <div className={css({
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.75rem",
-                          })}>
+                          <div
+                            className={css({
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.75rem",
+                            })}
+                          >
                             {iconPath && (
-                              <img 
-                                src={iconPath} 
-                                alt={`${asset.metadata.symbol} icon`} 
+                              <img
+                                src={iconPath}
+                                alt={`${asset.metadata.symbol} icon`}
                                 className={css({
                                   width: "1.5rem",
                                   height: "1.5rem",
                                   objectFit: "contain",
-                                })} 
+                                })}
                               />
                             )}
                             <span className={css({ fontWeight: "500" })}>
@@ -720,62 +766,127 @@ export function BridgeAssetsInDialog({
               gap: "1rem",
             })}
           >
-            <div className={css({
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              marginBottom: "1rem",
-            })}>
+            <div
+              className={css({
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                marginBottom: "1rem",
+              })}
+            >
               {selectedAsset && (
                 <>
-                  {(selectedAsset.isNativeVarch || getTokenIcon(selectedAsset.metadata.symbol)) && (
-                    <img 
-                      src={selectedAsset.isNativeVarch ? "/invarch-logo.svg" : getTokenIcon(selectedAsset.metadata.symbol) || ''} 
-                      alt={`${selectedAsset.metadata.symbol} icon`} 
+                  {(selectedAsset.isNativeVarch ||
+                    getTokenIcon(selectedAsset.metadata.symbol)) && (
+                    <img
+                      src={
+                        selectedAsset.isNativeVarch
+                          ? "/invarch-logo.svg"
+                          : getTokenIcon(selectedAsset.metadata.symbol) || ""
+                      }
+                      alt={`${selectedAsset.metadata.symbol} icon`}
                       className={css({
                         width: "1.5rem",
                         height: "1.5rem",
                         objectFit: "contain",
-                      })} 
+                      })}
                     />
                   )}
                   <p>
-                    Enter the amount of {selectedAsset.metadata.symbol} to bridge to the DAO
+                    Enter the amount of {selectedAsset.metadata.symbol} to
+                    bridge to the DAO
                   </p>
                 </>
               )}
             </div>
 
-            <TextInput
-              label={`Amount (${selectedAsset?.metadata.symbol})`}
-              value={amount}
-              onChangeValue={(value) => {
-                // Allow decimal points and numbers
-                const regex = new RegExp(
-                  `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
-                );
-                if (value === "" || regex.test(value)) {
-                  setAmount(value);
-                }
-              }}
-              placeholder={`Enter amount in ${selectedAsset?.metadata.symbol}`}
-              className={css({ width: "100%" })}
-            />
             <div
               className={css({
-                fontSize: "0.85rem",
-                color: "content.muted",
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.5rem",
+                gap: "1rem",
               })}
             >
-              <p>Available balance: {getFormattedBalance()}</p>
-              <p>
-                {selectedAsset?.isNativeVarch
-                  ? `Make sure you have enough funds in your account to cover the transaction fees.`
-                  : `Make sure you have enough funds in your Asset Hub account to cover the transaction fees.`}
-              </p>
+              <TextInput
+                label={`Amount (${selectedAsset?.metadata.symbol})`}
+                value={amount}
+                onChangeValue={(value) => {
+                  // Allow decimal points and numbers
+                  const regex = new RegExp(
+                    `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
+                  );
+                  if (value === "" || regex.test(value)) {
+                    setAmount(value);
+                  }
+                }}
+                placeholder={`Enter amount in ${selectedAsset?.metadata.symbol}`}
+                className={css({ width: "100%" })}
+              />
+
+              {/* Add ED warning */}
+              {isRemainderBelowED && (
+                <div
+                  className={css({
+                    backgroundColor: "warningContainer",
+                    color: "onWarningContainer",
+                    padding: "0.75rem 1rem",
+                    borderRadius: "md",
+                    fontSize: "0.875rem",
+                  })}
+                >
+                  <p>
+                    <strong>Warning:</strong> The amount you&apos;re trying to
+                    bridge is less than the existential deposit (
+                    {selectedAsset &&
+                      new DenominatedNumber(
+                        selectedAsset.metadata.existential_deposit,
+                        selectedAsset.metadata.decimals,
+                      ).toLocaleString()}
+                    &nbsp;{selectedAsset?.metadata.symbol}). The funds may be
+                    lost if you proceed.
+                  </p>
+                </div>
+              )}
+
+              <div
+                className={css({
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                })}
+              >
+                <div
+                  className={css({
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.25rem",
+                  })}
+                >
+                  <p
+                    className={css({
+                      color: "content.muted",
+                      fontSize: "0.875rem",
+                    })}
+                  >
+                    Available balance:{" "}
+                    {selectedAsset ? getFormattedBalance() : "Select an asset"}{" "}
+                    on {selectedAsset?.isNativeVarch ? "InvArch" : "Asset Hub"}
+                    {selectedAsset ? getFormattedBalance() : "Select an asset"}
+                  </p>
+                  {selectedAsset && (
+                    <p
+                      className={css({
+                        fontSize: "0.85rem",
+                        color: "content.muted",
+                      })}
+                    >
+                      {selectedAsset.isNativeVarch
+                        ? "Make sure you have enough funds in your account to cover the transaction fees."
+                        : "Make sure you have enough funds in your Asset Hub account to cover the transaction fees."}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -1112,6 +1223,91 @@ export function BridgeAssetsInDialog({
 
         {/* Action buttons */}
         {renderActionButtons()}
+
+        {/* Add ED Confirmation Dialog */}
+        {showEDConfirmation && (
+          <ModalDialog
+            title="Confirm Transaction"
+            onClose={() => setShowEDConfirmation(false)}
+            className={css({
+              containerType: "inline-size",
+              width: `min(34rem, 100dvw)`,
+            })}
+          >
+            <div
+              className={css({
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.5rem",
+                alignItems: "center",
+                textAlign: "center",
+              })}
+            >
+              <p
+                className={css({
+                  color: "warning",
+                  fontSize: "1rem",
+                  lineHeight: "1.5",
+                })}
+              >
+                You are about to bridge an amount below the existential deposit
+                (
+                {selectedAsset && (
+                  <>
+                    {new DenominatedNumber(
+                      selectedAsset.metadata.existential_deposit,
+                      selectedAsset.metadata.decimals,
+                    ).toLocaleString()}{" "}
+                    {selectedAsset.metadata.symbol}
+                  </>
+                )}
+                ).
+                <br />
+                <br />
+                This may result in the funds being unusable and effectively
+                lost.
+                <br />
+                <br />
+                Are you sure you want to proceed?
+              </p>
+              <div
+                className={css({
+                  display: "flex",
+                  gap: "1rem",
+                  width: "100%",
+                  justifyContent: "center",
+                })}
+              >
+                <Button
+                  onClick={() => {
+                    setShowEDConfirmation(false);
+                  }}
+                  className={css({
+                    backgroundColor: "surface",
+                    color: "onSurface",
+                  })}
+                >
+                  No, let me adjust
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowEDConfirmation(false);
+                    setStep("review");
+                  }}
+                  className={css({
+                    backgroundColor: "warning",
+                    color: "black",
+                    "&:hover": {
+                      backgroundColor: "warningHover",
+                    },
+                  })}
+                >
+                  Yes, proceed anyway
+                </Button>
+              </div>
+            </div>
+          </ModalDialog>
+        )}
       </div>
     </ModalDialog>
   );

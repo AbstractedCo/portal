@@ -31,11 +31,19 @@ export interface BridgeOutParams {
   onComplete?: () => void;
 }
 
-// Parameters for validation
+export interface ValidationResult {
+  isValid: boolean;
+  error?: string;
+}
+
 export interface BridgeValidationParams {
-  location: XcmVersionedLocation | undefined;
   amount: string;
-  account: SS58String | undefined;
+  assetDecimals: number;
+  existentialDeposit: bigint;
+  currentBalance?: bigint;
+  minAmount?: bigint;
+  location?: XcmVersionedLocation;
+  account?: SS58String;
 }
 
 // Known supported bridge chains
@@ -414,9 +422,19 @@ export function useInvArchBridgeOutOperation(
   };
 
   // Validation function for outbound bridge
-  const validateBridgeOut = ({ amount, account }: BridgeValidationParams) => {
+  const validateBridgeOut = ({
+    amount,
+    account,
+    assetDecimals,
+    existentialDeposit,
+  }: BridgeValidationParams) => {
     if (!amount || !account) return false;
-    return true;
+    const amountValidation = validateBridgeAmount({
+      amount,
+      assetDecimals,
+      existentialDeposit,
+    });
+    return amountValidation.isValid;
   };
 
   return {
@@ -466,4 +484,56 @@ export function getBridgeSourceChain(
   }
 
   return undefined;
+}
+
+export function validateBridgeAmount(
+  params: BridgeValidationParams,
+): ValidationResult {
+  const {
+    amount,
+    assetDecimals,
+    existentialDeposit,
+    currentBalance,
+    minAmount,
+  } = params;
+
+  // Basic amount validation
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    return {
+      isValid: false,
+      error: "Please enter a valid amount greater than zero.",
+    };
+  }
+
+  // Convert amount to bigint with proper decimals
+  const amountBigInt = BigInt(
+    Math.floor(parsedAmount * Math.pow(10, assetDecimals)),
+  );
+
+  // Check minimum amount if specified
+  if (minAmount && amountBigInt < minAmount) {
+    return {
+      isValid: false,
+      error: `Amount is below the minimum required amount.`,
+    };
+  }
+
+  // Check if amount exceeds balance
+  if (currentBalance && amountBigInt > currentBalance) {
+    return {
+      isValid: false,
+      error: "Amount exceeds available balance.",
+    };
+  }
+
+  // Check existential deposit
+  if (amountBigInt < existentialDeposit) {
+    return {
+      isValid: false,
+      error: "Amount is below the existential deposit.",
+    };
+  }
+
+  return { isValid: true };
 }

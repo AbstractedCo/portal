@@ -14,21 +14,21 @@ import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import type { Binary, SS58String } from "polkadot-api";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 // Helper function to get the appropriate icon for a token
 const getTokenIcon = (symbol: string) => {
   const normalizedSymbol = symbol.toUpperCase();
-  
+
   switch (normalizedSymbol) {
-    case 'DOT':
-      return '/polkadot-new-dot-logo.svg';
-    case 'USDT':
-      return '/tether-usdt-logo.svg';
-    case 'USDC':
-      return '/usd-coin-usdc-logo.svg';
-    case 'VARCH':
-      return '/invarch-logo.svg';
+    case "DOT":
+      return "/polkadot-new-dot-logo.svg";
+    case "USDT":
+      return "/tether-usdt-logo.svg";
+    case "USDC":
+      return "/usd-coin-usdc-logo.svg";
+    case "VARCH":
+      return "/invarch-logo.svg";
     default:
       return null;
   }
@@ -44,6 +44,7 @@ interface AssetMetadata {
   symbol: Binary;
   name: Binary;
   decimals: number;
+  existential_deposit: bigint;
 }
 
 interface TokenBalance {
@@ -52,6 +53,12 @@ interface TokenBalance {
     free: bigint;
     reserved: bigint;
     frozen: bigint;
+  };
+  metadata?: {
+    symbol: string;
+    decimals: number;
+    name: string;
+    existential_deposit: bigint;
   };
 }
 
@@ -66,6 +73,7 @@ interface Asset {
     symbol: string;
     decimals: number;
     name: string;
+    existential_deposit: bigint;
   };
 }
 
@@ -79,6 +87,7 @@ export function BridgeAssetsOutDialog({
       symbol: string;
       decimals: number;
       name: string;
+      existential_deposit: bigint;
     };
   } | null>(null);
 
@@ -114,24 +123,31 @@ export function BridgeAssetsOutDialog({
   };
 
   // Query DAO's token balances with proper typing
-  const daoTokens: TokenBalance[] =
-    (useLazyLoadQuery((builder) => {
-      if (!coreStorage?.account) return null;
-      return builder.readStorageEntries("Tokens", "Accounts", [
-        coreStorage.account,
-      ]);
-    }) as unknown as TokenBalance[]) || [];
+  const daoTokensResult = useLazyLoadQuery((builder) => {
+    if (!coreStorage?.account) return null;
+    return builder.readStorageEntries("Tokens", "Accounts", [
+      coreStorage.account,
+    ]);
+  }) as unknown as TokenBalance[] | null;
+
+  // Memoize the processed tokens to prevent unnecessary re-renders
+  const daoTokens = useMemo(() => daoTokensResult || [], [daoTokensResult]);
 
   // Get asset metadata for the tokens with proper typing
-  const assetMetadata: AssetMetadata[] =
-    (useLazyLoadQuery((builder) => {
-      if (!daoTokens?.length) return null;
-      return builder.readStorages(
-        "AssetRegistry",
-        "Metadata",
-        daoTokens.map((token) => [token.keyArgs[1]] as const),
-      );
-    }) as unknown as AssetMetadata[]) || [];
+  const assetMetadataResult = useLazyLoadQuery((builder) => {
+    if (!daoTokens?.length) return null;
+    return builder.readStorages(
+      "AssetRegistry",
+      "Metadata",
+      daoTokens.map((token) => [token.keyArgs[1]] as const),
+    );
+  }) as unknown as AssetMetadata[] | null;
+
+  // Memoize the processed metadata to prevent unnecessary re-renders
+  const assetMetadata = useMemo(
+    () => assetMetadataResult || [],
+    [assetMetadataResult],
+  );
 
   // Convert amount to proper decimals
   const getRawAmount = () => {
@@ -302,7 +318,8 @@ export function BridgeAssetsOutDialog({
         !metadata ||
         metadata.symbol === undefined ||
         metadata.decimals === undefined ||
-        metadata.name === undefined
+        metadata.name === undefined ||
+        metadata.existential_deposit === undefined
       )
         continue;
 
@@ -315,6 +332,7 @@ export function BridgeAssetsOutDialog({
           symbol: metadata.symbol.asText(),
           decimals: metadata.decimals,
           name: metadata.name.asText(),
+          existential_deposit: metadata.existential_deposit,
         },
       });
     }
@@ -355,6 +373,15 @@ export function BridgeAssetsOutDialog({
     if (step === "select-asset" && selectedAsset) {
       setStep("enter-amount");
     } else if (step === "enter-amount" && amount && destinationAccount) {
+      // Check if remaining balance would be below existential deposit
+      if (isRemainderBelowED && !showEDConfirmation) {
+        // Show confirmation dialog instead of proceeding
+        setShowEDConfirmation(true);
+        return;
+      }
+
+      // Reset the confirmation dialog when moving to review step
+      setShowEDConfirmation(false);
       setStep("review");
     }
   };
@@ -362,16 +389,107 @@ export function BridgeAssetsOutDialog({
   // Handle going back to the previous step
   const handleBackStep = () => {
     if (step === "enter-amount") {
+      // Reset the confirmation dialog when going back
+      setShowEDConfirmation(false);
       setStep("select-asset");
     } else if (step === "review") {
       setStep("enter-amount");
     }
   };
 
+  // State for tracking if the remaining balance would be below existential deposit
+  const [isRemainderBelowED, setIsRemainderBelowED] = useState(false);
+
+  // State for showing confirmation dialog
+  const [showEDConfirmation, setShowEDConfirmation] = useState(false);
+
+  // Define maxAmountValue at the component level so it's accessible to all functions
+  const [maxAmountValue, setMaxAmountValue] = useState("0");
+
+  // Memoize expensive ED calculations
+  const edCalculations = useMemo(() => {
+    if (!selectedAsset || !daoTokens || step !== "enter-amount") {
+      return { isRemainderBelowED: false, maxAmount: "0" };
+    }
+
+    const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
+    if (!token?.value?.free) {
+      return { isRemainderBelowED: false, maxAmount: "0" };
+    }
+
+    const currentBalance = new DenominatedNumber(
+      token.value.free,
+      selectedAsset.metadata.decimals,
+    );
+    const currentBalanceValue = parseFloat(currentBalance.toLocaleString());
+    const maxAmount = currentBalance.toLocaleString();
+
+    if (!amount) {
+      return { isRemainderBelowED: false, maxAmount };
+    }
+
+    const amountValue = parseFloat(amount);
+    const edDenominated = new DenominatedNumber(
+      selectedAsset.metadata.existential_deposit,
+      selectedAsset.metadata.decimals,
+    );
+    const existentialDepositValue = parseFloat(edDenominated.toLocaleString());
+    const remainingBalance = currentBalanceValue - amountValue;
+
+    return {
+      isRemainderBelowED:
+        remainingBalance > 0 && remainingBalance < existentialDepositValue,
+      maxAmount,
+    };
+  }, [selectedAsset, daoTokens, amount, step]);
+
+  // Update state based on memoized calculations
+  useEffect(() => {
+    setIsRemainderBelowED(edCalculations.isRemainderBelowED);
+    setMaxAmountValue(edCalculations.maxAmount);
+  }, [edCalculations]);
+
   // Render appropriate content based on the current step
   const renderStepContent = () => {
     // Get the available assets
     const availableAssets = getAvailableAssets();
+
+    // Calculate existential deposit and balance information if we're on the enter-amount step
+    if (step === "enter-amount" && selectedAsset) {
+      // Get current balance - this is only for display in the render function
+      const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
+      if (token && token.value && token.value.free) {
+        // Check if remaining balance would be below existential deposit - for logging only
+        if (amount) {
+          const currentBalance = new DenominatedNumber(
+            token.value.free,
+            selectedAsset.metadata.decimals,
+          );
+
+          const amountValue = parseFloat(amount) || 0;
+          const currentBalanceValue = parseFloat(
+            currentBalance.toLocaleString(),
+          );
+          const existentialDepositValue = parseFloat(
+            new DenominatedNumber(
+              selectedAsset?.metadata.existential_deposit || BigInt(0),
+
+              selectedAsset?.metadata.decimals || 0,
+            ).toLocaleString(),
+          );
+
+          const remainingBalance = currentBalanceValue - amountValue;
+
+          console.log("Existential deposit check:", {
+            amountValue,
+            currentBalanceValue,
+            existentialDepositValue,
+            remainingBalance,
+            isRemainderBelowED,
+          });
+        }
+      }
+    }
 
     switch (step) {
       case "select-asset":
@@ -423,7 +541,7 @@ export function BridgeAssetsOutDialog({
                 >
                   {availableAssets.map((asset) => {
                     const iconPath = getTokenIcon(asset.metadata.symbol);
-                    
+
                     return (
                       <button
                         key={asset.id}
@@ -453,20 +571,22 @@ export function BridgeAssetsOutDialog({
                           },
                         })}
                       >
-                        <div className={css({
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.75rem",
-                        })}>
+                        <div
+                          className={css({
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.75rem",
+                          })}
+                        >
                           {iconPath && (
-                            <img 
-                              src={iconPath} 
-                              alt={`${asset.metadata.symbol} icon`} 
+                            <img
+                              src={iconPath}
+                              alt={`${asset.metadata.symbol} icon`}
                               className={css({
                                 width: "1.5rem",
                                 height: "1.5rem",
                                 objectFit: "contain",
-                              })} 
+                              })}
                             />
                           )}
                           <span className={css({ fontWeight: "500" })}>
@@ -520,28 +640,30 @@ export function BridgeAssetsOutDialog({
               gap: "1rem",
             })}
           >
-            <div className={css({
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              marginBottom: "1rem",
-            })}>
+            <div
+              className={css({
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                marginBottom: "1rem",
+              })}
+            >
               {selectedAsset && (
                 <>
                   {getTokenIcon(selectedAsset.metadata.symbol) && (
-                    <img 
-                      src={getTokenIcon(selectedAsset.metadata.symbol) || ''} 
-                      alt={`${selectedAsset.metadata.symbol} icon`} 
+                    <img
+                      src={getTokenIcon(selectedAsset.metadata.symbol) || ""}
+                      alt={`${selectedAsset.metadata.symbol} icon`}
                       className={css({
                         width: "1.5rem",
                         height: "1.5rem",
                         objectFit: "contain",
-                      })} 
+                      })}
                     />
                   )}
                   <p>
-                    Enter the amount of {selectedAsset.metadata.symbol} to bridge
-                    from the DAO to {destinationChain}
+                    Enter the amount of {selectedAsset.metadata.symbol} to
+                    bridge from the DAO to {destinationChain}
                   </p>
                 </>
               )}
@@ -561,6 +683,52 @@ export function BridgeAssetsOutDialog({
               placeholder={`Enter amount in ${selectedAsset?.metadata.symbol}`}
               className={css({ width: "100%" })}
             />
+
+            {/* Warning for existential deposit */}
+            {isRemainderBelowED && (
+              <div
+                className={css({
+                  backgroundColor: "warningContainer",
+                  color: "onWarningContainer",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "md",
+                  fontSize: "0.875rem",
+                })}
+              >
+                <p>
+                  <strong>Warning:</strong> The remaining balance would be less
+                  than the existential deposit (
+                  {new DenominatedNumber(
+                    selectedAsset?.metadata.existential_deposit || BigInt(0),
+
+                    selectedAsset?.metadata.decimals || 0,
+                  ).toLocaleString()}
+                  &nbsp;
+                  {selectedAsset?.metadata.symbol}). Consider transferring your
+                  entire balance to avoid losing funds.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAmount(maxAmountValue)}
+                  className={css({
+                    background: "none",
+                    border: "none",
+                    color: "onWarningContainer",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    padding: "0.5rem 0 0 0",
+                    fontSize: "0.85rem",
+                    textDecoration: "underline",
+                    "&:hover": {
+                      textDecoration: "none",
+                    },
+                  })}
+                >
+                  Use max amount
+                </button>
+              </div>
+            )}
+
             <div
               className={css({
                 fontSize: "0.85rem",
@@ -571,6 +739,27 @@ export function BridgeAssetsOutDialog({
               })}
             >
               <p>Available balance: {getFormattedBalance()}</p>
+              {!isRemainderBelowED && (
+                <button
+                  type="button"
+                  onClick={() => setAmount(maxAmountValue)}
+                  className={css({
+                    background: "none",
+                    border: "none",
+                    color: "primary",
+                    cursor: "pointer",
+                    padding: "0",
+                    fontSize: "0.85rem",
+                    textDecoration: "underline",
+                    width: "fit-content",
+                    "&:hover": {
+                      textDecoration: "none",
+                    },
+                  })}
+                >
+                  Use max amount
+                </button>
+              )}
             </div>
             <div
               className={css({
@@ -694,22 +883,25 @@ export function BridgeAssetsOutDialog({
                 })}
               >
                 <span className={css({ color: "content.muted" })}>Asset</span>
-                <div className={css({
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                })}>
-                  {selectedAsset && getTokenIcon(selectedAsset.metadata.symbol) && (
-                    <img 
-                      src={getTokenIcon(selectedAsset.metadata.symbol) || ''} 
-                      alt={`${selectedAsset.metadata.symbol} icon`} 
-                      className={css({
-                        width: "1.25rem",
-                        height: "1.25rem",
-                        objectFit: "contain",
-                      })} 
-                    />
-                  )}
+                <div
+                  className={css({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  })}
+                >
+                  {selectedAsset &&
+                    getTokenIcon(selectedAsset.metadata.symbol) && (
+                      <img
+                        src={getTokenIcon(selectedAsset.metadata.symbol) || ""}
+                        alt={`${selectedAsset.metadata.symbol} icon`}
+                        className={css({
+                          width: "1.25rem",
+                          height: "1.25rem",
+                          objectFit: "contain",
+                        })}
+                      />
+                    )}
                   <span className={css({ fontWeight: "500" })}>
                     {selectedAsset?.metadata.symbol}
                   </span>
@@ -942,7 +1134,20 @@ export function BridgeAssetsOutDialog({
                           ) > index
                         ? "onPrimary"
                         : "content",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
                   marginBottom: "0.5rem",
+                  "&:hover": {
+                    backgroundColor:
+                      step === stepName
+                        ? "primary"
+                        : ["select-asset", "enter-amount", "review"].indexOf(
+                              step,
+                            ) > index
+                          ? "primary"
+                          : "surfaceContainerHighest",
+                  },
                 })}
               >
                 {index + 1}
@@ -996,6 +1201,101 @@ export function BridgeAssetsOutDialog({
         {/* Action buttons */}
         {renderActionButtons()}
       </div>
+      {/* Existential Deposit Confirmation Dialog */}
+      {showEDConfirmation && (
+        <ModalDialog
+          title="Confirm Transaction"
+          onClose={() => setShowEDConfirmation(false)}
+          className={css({
+            containerType: "inline-size",
+            width: `min(34rem, 100dvw)`,
+          })}
+        >
+          <div
+            className={css({
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.5rem",
+              alignItems: "center",
+              textAlign: "center",
+            })}
+          >
+            <p
+              className={css({
+                color: "warning",
+                fontSize: "1rem",
+                lineHeight: "1.5",
+              })}
+            >
+              You are about to leave a balance below the existential deposit (
+              {selectedAsset && (
+                <>
+                  {new DenominatedNumber(
+                    selectedAsset.metadata.existential_deposit,
+                    selectedAsset.metadata.decimals,
+                  ).toLocaleString()}{" "}
+                  {selectedAsset.metadata.symbol}
+                </>
+              )}
+              ).
+              <br />
+              <br />
+              This may result in the remaining funds being unusable and
+              effectively lost.
+              <br />
+              <br />
+              Are you sure you want to proceed?
+            </p>
+            <div
+              className={css({
+                display: "flex",
+                gap: "1rem",
+                width: "100%",
+                justifyContent: "center",
+              })}
+            >
+              <Button
+                onClick={() => {
+                  setShowEDConfirmation(false);
+                }}
+                className={css({
+                  backgroundColor: "surface",
+                  color: "onSurface",
+                })}
+              >
+                No, let me adjust
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowEDConfirmation(false);
+                  setStep("review");
+                }}
+                className={css({
+                  backgroundColor: "warning",
+                  color: "black",
+                  "&:hover": {
+                    backgroundColor: "warningHover",
+                  },
+                })}
+              >
+                Yes, proceed anyway
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowEDConfirmation(false);
+                  setAmount(maxAmountValue);
+                }}
+                className={css({
+                  backgroundColor: "primary",
+                  color: "onPrimary",
+                })}
+              >
+                Use max amount
+              </Button>
+            </div>
+          </div>
+        </ModalDialog>
+      )}
     </ModalDialog>
   );
 }
