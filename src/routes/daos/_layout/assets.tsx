@@ -17,7 +17,7 @@ import { useAtomValue } from "jotai";
 import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
 import { Binary } from "polkadot-api";
 import { QRCodeSVG } from "qrcode.react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
@@ -640,7 +640,7 @@ function TransferDialog({
   const VARCH_BUFFER = VARCH_EXISTENTIAL_DEPOSIT * 2n; // 2x existential deposit for better safety margin
 
   // Get the free balance based on token type
-  const getFreeBalance = () => {
+  const getFreeBalance = useCallback(() => {
     if (!daoTokenBalance) return 0n;
 
     // For native token (VARCH)
@@ -650,7 +650,7 @@ function TransferDialog({
 
     // For other tokens
     return (daoTokenBalance as TokenAccount).free;
-  };
+  }, [daoTokenBalance, tokenId]);
 
   // Calculate max amount considering existential deposit only for VARCH
   const maxAmount = useMemo(() => {
@@ -667,13 +667,19 @@ function TransferDialog({
 
     // For other tokens, use full free balance without formatting
     return (Number(freeBalance) / Math.pow(10, decimals)).toString();
-  }, [daoTokenBalance, tokenId, decimals]);
+  }, [
+    getFreeBalance,
+    tokenId,
+    decimals,
+    VARCH_EXISTENTIAL_DEPOSIT,
+    VARCH_BUFFER,
+  ]);
 
   // Format balance for display separately
   const formattedBalance = useMemo(() => {
     const freeBalance = getFreeBalance();
     return new DenominatedNumber(freeBalance, decimals).toLocaleString();
-  }, [daoTokenBalance, decimals]);
+  }, [decimals, getFreeBalance]);
 
   // Check for existential deposit issues only for VARCH
   useEffect(() => {
@@ -690,7 +696,16 @@ function TransferDialog({
         setIsRemainderBelowED(false);
       }
     }
-  }, [amount, daoTokenBalance, tokenId, decimals, setIsRemainderBelowED]);
+  }, [
+    amount,
+    daoTokenBalance,
+    tokenId,
+    decimals,
+    setIsRemainderBelowED,
+    getFreeBalance,
+    VARCH_EXISTENTIAL_DEPOSIT,
+    VARCH_BUFFER,
+  ]);
 
   // Handle form submission with existential deposit check for VARCH
   const handleSubmit = async (event: React.FormEvent) => {
