@@ -17,7 +17,7 @@ import { useAtomValue } from "jotai";
 import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
 import { Binary } from "polkadot-api";
 import { QRCodeSVG } from "qrcode.react";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
@@ -652,34 +652,23 @@ function TransferDialog({
     return (daoTokenBalance as TokenAccount).free;
   }, [daoTokenBalance, tokenId]);
 
-  // Calculate max amount considering existential deposit only for VARCH
-  const maxAmount = useMemo(() => {
-    const freeBalance = getFreeBalance();
-
+  // Get the maximum amount that can be transferred
+  const getMaxAmount = (freeBalance: bigint, decimals: number) => {
     // For VARCH, consider existential deposit and buffer
     if (tokenId === 0) {
       const minimumRequired = VARCH_EXISTENTIAL_DEPOSIT + VARCH_BUFFER;
       if (freeBalance <= minimumRequired) return "0";
       const safeMaximum = freeBalance - minimumRequired;
-      // Return the raw number string without formatting
-      return (Number(safeMaximum) / Math.pow(10, decimals)).toString();
+      return new DenominatedNumber(safeMaximum, decimals).toString();
     }
-
-    // For other tokens, use full free balance without formatting
-    return (Number(freeBalance) / Math.pow(10, decimals)).toString();
-  }, [
-    getFreeBalance,
-    tokenId,
-    decimals,
-    VARCH_EXISTENTIAL_DEPOSIT,
-    VARCH_BUFFER,
-  ]);
+    // For other tokens, use full free balance
+    return new DenominatedNumber(freeBalance, decimals).toString();
+  };
 
   // Format balance for display separately
-  const formattedBalance = useMemo(() => {
-    const freeBalance = getFreeBalance();
+  const getFormattedBalance = (freeBalance: bigint, decimals: number) => {
     return new DenominatedNumber(freeBalance, decimals).toLocaleString();
-  }, [decimals, getFreeBalance]);
+  };
 
   // Check for existential deposit issues only for VARCH
   useEffect(() => {
@@ -875,11 +864,14 @@ function TransferDialog({
             })}
           >
             <span>
-              Available balance: {formattedBalance} {symbol}
+              Available balance:{" "}
+              {getFormattedBalance(getFreeBalance(), decimals)} {symbol}
             </span>
             <button
               type="button"
-              onClick={() => setAmount(maxAmount)}
+              onClick={() =>
+                setAmount(getMaxAmount(getFreeBalance(), decimals))
+              }
               className={css({
                 background: "none",
                 border: "none",
@@ -919,7 +911,9 @@ function TransferDialog({
               </p>
               <button
                 type="button"
-                onClick={() => setAmount(maxAmount)}
+                onClick={() =>
+                  setAmount(getMaxAmount(getFreeBalance(), decimals))
+                }
                 className={css({
                   background: "none",
                   border: "none",
@@ -1100,7 +1094,7 @@ function TransferDialog({
               <Button
                 onClick={() => {
                   setShowEDConfirmation(false);
-                  setAmount(maxAmount);
+                  setAmount(getMaxAmount(getFreeBalance(), decimals));
                 }}
                 className={css({
                   backgroundColor: "primary",

@@ -19,7 +19,11 @@ import { useMutation, useMutationEffect } from "@reactive-dot/react";
 import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+
+// Add constants for VARCH token
+const VARCH_EXISTENTIAL_DEPOSIT = 10_000_000_000n;
+const VARCH_BUFFER = VARCH_EXISTENTIAL_DEPOSIT * 2n;
 
 // Helper function to get the appropriate icon for a token
 const getTokenIcon = (symbol: string) => {
@@ -540,6 +544,61 @@ export function BridgeAssetsInDialog({
       setStep("enter-amount");
     }
   };
+
+  // Get the free balance based on token type
+  const getFreeBalance = useCallback(() => {
+    if (!selectedAsset?.isNativeVarch) {
+      if (!assetHubBalance) return 0n;
+      if (typeof assetHubBalance === "object" && "balance" in assetHubBalance) {
+        return assetHubBalance.balance ?? 0n;
+      }
+      if (typeof assetHubBalance === "object" && "data" in assetHubBalance) {
+        return assetHubBalance.data?.free || 0n;
+      }
+    } else {
+      if (!nativeBalance || typeof nativeBalance !== "object") return 0n;
+      if ("data" in nativeBalance) {
+        return nativeBalance.data.free;
+      }
+    }
+    return 0n;
+  }, [selectedAsset, assetHubBalance, nativeBalance]);
+
+  // Calculate max amount considering existential deposit only for VARCH
+  const _maxAmount = useMemo(() => {
+    const freeBalance = getFreeBalance();
+
+    // For VARCH, consider existential deposit and buffer
+    if (selectedAsset?.isNativeVarch) {
+      const minimumRequired = VARCH_EXISTENTIAL_DEPOSIT + VARCH_BUFFER;
+      if (freeBalance <= minimumRequired) return "0";
+      const safeMaximum = freeBalance - minimumRequired;
+      return new DenominatedNumber(
+        safeMaximum,
+        selectedAsset.metadata.decimals,
+      ).toString();
+    }
+
+    // For other assets, use full free balance
+    if (selectedAsset) {
+      return new DenominatedNumber(
+        freeBalance,
+        selectedAsset.metadata.decimals,
+      ).toString();
+    }
+
+    return "0";
+  }, [selectedAsset, getFreeBalance]);
+
+  // Format balance for display separately
+  const _formattedBalance = useMemo(() => {
+    const freeBalance = getFreeBalance();
+    if (!selectedAsset) return "Loading...";
+    return new DenominatedNumber(
+      freeBalance,
+      selectedAsset.metadata.decimals,
+    ).toLocaleString();
+  }, [selectedAsset, getFreeBalance]);
 
   // Render appropriate content based on the current step
   const renderStepContent = () => {

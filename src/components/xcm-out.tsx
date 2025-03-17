@@ -205,27 +205,31 @@ export function BridgeAssetsOutDialog({
     return assets;
   };
 
-  // Get formatted balance for display
-  const getFormattedBalance = () => {
-    try {
-      if (!selectedAsset || !daoTokens) return "Loading...";
+  // Calculate max amount considering existential deposit
+  const _maxAmount = useMemo(() => {
+    if (!selectedAsset || !daoTokens) return "0";
 
-      const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
-      if (!token || !token.value || !token.value.free) return "Loading...";
+    const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
+    if (!token?.value?.free) return "0";
 
-      return (
-        new DenominatedNumber(
-          token.value.free,
-          selectedAsset.metadata.decimals,
-        ).toLocaleString() +
-        " " +
-        selectedAsset.metadata.symbol
-      );
-    } catch (error) {
-      console.warn("Error formatting balance:", error);
-      return "Error loading balance";
-    }
-  };
+    return new DenominatedNumber(
+      token.value.free,
+      selectedAsset.metadata.decimals,
+    ).toString();
+  }, [selectedAsset, daoTokens]);
+
+  // Format balance for display separately
+  const formattedBalance = useMemo(() => {
+    if (!selectedAsset || !daoTokens) return "Loading...";
+
+    const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
+    if (!token?.value?.free) return "Loading...";
+
+    return new DenominatedNumber(
+      token.value.free,
+      selectedAsset.metadata.decimals,
+    ).toLocaleString();
+  }, [selectedAsset, daoTokens]);
 
   // Convert amount to proper decimals
   const getRawAmount = () => {
@@ -441,8 +445,8 @@ export function BridgeAssetsOutDialog({
       token.value.free,
       selectedAsset.metadata.decimals,
     );
-    const currentBalanceValue = parseFloat(currentBalance.toLocaleString());
-    const maxAmount = currentBalance.toLocaleString();
+    const currentBalanceValue = parseFloat(currentBalance.toString());
+    const maxAmount = currentBalance.toString();
 
     if (!amount) {
       return { isRemainderBelowED: false, maxAmount };
@@ -453,7 +457,7 @@ export function BridgeAssetsOutDialog({
       selectedAsset.metadata.existential_deposit,
       selectedAsset.metadata.decimals,
     );
-    const existentialDepositValue = parseFloat(edDenominated.toLocaleString());
+    const existentialDepositValue = parseFloat(edDenominated.toString());
     const remainingBalance = currentBalanceValue - amountValue;
 
     return {
@@ -745,7 +749,7 @@ export function BridgeAssetsOutDialog({
                 gap: "0.5rem",
               })}
             >
-              <p>Available balance: {getFormattedBalance()}</p>
+              <p>Available balance: {formattedBalance}</p>
               {!isRemainderBelowED && (
                 <button
                   type="button"
