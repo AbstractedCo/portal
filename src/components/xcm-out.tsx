@@ -18,7 +18,7 @@ import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import type { Binary, SS58String } from "polkadot-api";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 
 interface BridgeAssetsOutDialogProps {
   daoId: number;
@@ -141,7 +141,7 @@ export function BridgeAssetsOutDialog({
   );
 
   // Combine tokens with their metadata
-  const getAvailableAssets = (): Asset[] => {
+  const getAvailableAssets = useCallback((): Asset[] => {
     if (!daoTokens || !assetMetadata) return [];
 
     const assets: Asset[] = [];
@@ -194,14 +194,14 @@ export function BridgeAssetsOutDialog({
     }
 
     return assets;
-  };
+  }, [daoTokens, assetMetadata]);
 
   // Get available fee assets
   const getAvailableFeeAssets = useMemo(() => {
     if (!daoTokens || !assetMetadata) return [];
 
     return getAvailableAssets().filter((asset) => canPayFees(asset.id));
-  }, [daoTokens, assetMetadata]);
+  }, [daoTokens, assetMetadata, getAvailableAssets]);
 
   // Check if selected asset needs fee payment
   const needsFeePaying = useMemo(() => {
@@ -210,7 +210,7 @@ export function BridgeAssetsOutDialog({
   }, [selectedAsset]);
 
   // Calculate max amount considering existential deposit
-  const _maxAmount = useMemo(() => {
+  const maxAmount = useMemo(() => {
     if (!selectedAsset || !daoTokens) return "0";
 
     const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
@@ -221,6 +221,11 @@ export function BridgeAssetsOutDialog({
       selectedAsset.metadata.decimals,
     ).toString();
   }, [selectedAsset, daoTokens]);
+
+  // Update maxAmountValue whenever maxAmount changes
+  useEffect(() => {
+    setMaxAmountValue(maxAmount);
+  }, [maxAmount]);
 
   // Format balance for display separately
   const formattedBalance = useMemo(() => {
@@ -564,8 +569,8 @@ export function BridgeAssetsOutDialog({
                       onClick={() => setSelectedAsset(asset)}
                       className={css({
                         display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
+                        flexDirection: "column",
+                        gap: "0.5rem",
                         padding: "0.75rem 1rem",
                         backgroundColor:
                           selectedAsset?.id === asset.id
@@ -590,29 +595,56 @@ export function BridgeAssetsOutDialog({
                       <div
                         className={css({
                           display: "flex",
+                          justifyContent: "space-between",
                           alignItems: "center",
-                          gap: "0.75rem",
+                          width: "100%",
                         })}
                       >
-                        <TokenIcon symbol={asset.metadata.symbol} size="md" />
-                        <span className={css({ fontWeight: "500" })}>
-                          {asset.metadata.symbol}
+                        <div
+                          className={css({
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.75rem",
+                          })}
+                        >
+                          <TokenIcon symbol={asset.metadata.symbol} size="md" />
+                          <span className={css({ fontWeight: "500" })}>
+                            {asset.metadata.symbol}
+                          </span>
+                        </div>
+                        <span
+                          className={css({
+                            fontSize: "0.875rem",
+                            color:
+                              selectedAsset?.id === asset.id
+                                ? "onPrimary"
+                                : "content.muted",
+                          })}
+                        >
+                          {new DenominatedNumber(
+                            asset.value.free,
+                            asset.metadata.decimals,
+                          ).toLocaleString()}
                         </span>
                       </div>
-                      <span
-                        className={css({
-                          fontSize: "0.875rem",
-                          color:
-                            selectedAsset?.id === asset.id
-                              ? "onPrimary"
-                              : "content.muted",
-                        })}
-                      >
-                        {new DenominatedNumber(
-                          asset.value.free,
-                          asset.metadata.decimals,
-                        ).toLocaleString()}
-                      </span>
+                      {needsFeePayment(asset.id) && (
+                        <div
+                          className={css({
+                            fontSize: "0.75rem",
+                            color:
+                              selectedAsset?.id === asset.id
+                                ? "onPrimary"
+                                : "warning",
+                            textAlign: "left",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                          })}
+                        >
+                          ⚠️ Requires at least 0.1 USDT/USDC for fees to bridge
+                          out
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>

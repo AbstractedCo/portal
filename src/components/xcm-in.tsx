@@ -541,8 +541,8 @@ export function BridgeAssetsInDialog({
     return 0n;
   }, [selectedAsset, assetHubBalance, nativeBalance]);
 
-  // Calculate max amount considering existential deposit only for VARCH
-  const _maxAmount = useMemo(() => {
+  // Calculate max amount considering existential deposit
+  const maxAmount = useMemo(() => {
     const freeBalance = getFreeBalance();
 
     // For VARCH, consider existential deposit and buffer
@@ -567,15 +567,22 @@ export function BridgeAssetsInDialog({
     return "0";
   }, [selectedAsset, getFreeBalance]);
 
-  // Format balance for display separately
-  const _formattedBalance = useMemo(() => {
-    const freeBalance = getFreeBalance();
-    if (!selectedAsset) return "Loading...";
-    return new DenominatedNumber(
-      freeBalance,
-      selectedAsset.metadata.decimals,
-    ).toLocaleString();
-  }, [selectedAsset, getFreeBalance]);
+  // Handle amount changes with validation
+  const handleAmountChange = useCallback(
+    (value: string) => {
+      if (value === maxAmount) {
+        setAmount(value);
+      } else {
+        const regex = new RegExp(
+          `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
+        );
+        if (value === "" || regex.test(value)) {
+          setAmount(value);
+        }
+      }
+    },
+    [maxAmount, selectedAsset?.metadata.decimals, setAmount],
+  );
 
   // Render appropriate content based on the current step
   const renderStepContent = () => {
@@ -874,15 +881,7 @@ export function BridgeAssetsInDialog({
               <TextInput
                 label={`Amount (${selectedAsset?.metadata.symbol})`}
                 value={amount}
-                onChangeValue={(value) => {
-                  // Allow decimal points and numbers
-                  const regex = new RegExp(
-                    `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
-                  );
-                  if (value === "" || regex.test(value)) {
-                    setAmount(value);
-                  }
-                }}
+                onChangeValue={handleAmountChange}
                 placeholder={`Enter amount in ${selectedAsset?.metadata.symbol}`}
                 className={css({ width: "100%" })}
               />
