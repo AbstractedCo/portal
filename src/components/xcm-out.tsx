@@ -9,6 +9,7 @@ import {
   needsFeePayment,
   calculateFeeAmount,
 } from "../features/xcm/bridge-utils";
+import { validateFeeBalance } from "../features/xcm/fee-assets";
 import { Button } from "./button";
 import { ModalDialog } from "./modal-dialog";
 import { TextInput } from "./text-input";
@@ -82,6 +83,11 @@ export function BridgeAssetsOutDialog({
   // Add state for fee asset selection
   const [selectedFeeAsset, setSelectedFeeAsset] = useState<{
     id: number;
+    value: {
+      free: bigint;
+      reserved: bigint;
+      frozen: bigint;
+    };
     metadata: {
       symbol: string;
       decimals: number;
@@ -200,7 +206,28 @@ export function BridgeAssetsOutDialog({
   const getAvailableFeeAssets = useMemo(() => {
     if (!daoTokens || !assetMetadata) return [];
 
-    return getAvailableAssets().filter((asset) => canPayFees(asset.id));
+    return getAvailableAssets().filter((asset) => {
+      // First check if the asset can be used for fees
+      if (!canPayFees(asset.id)) return false;
+
+      // Calculate minimum fee amount needed
+      const minFeeAmount = calculateFeeAmount(asset.id);
+
+      // Check if using this asset for fees would leave balance below ED
+      const remainingBalance = asset.value.free - minFeeAmount;
+      const isRemainderBelowED =
+        remainingBalance > 0n &&
+        remainingBalance < asset.metadata.existential_deposit;
+
+      // If remainder would be below ED, use entire balance as fee
+      if (isRemainderBelowED) {
+        // Validate if entire balance is enough for fees
+        return validateFeeBalance(asset.id, asset.value.free);
+      }
+
+      // Otherwise validate with normal fee amount
+      return validateFeeBalance(asset.id, asset.value.free);
+    });
   }, [daoTokens, assetMetadata, getAvailableAssets]);
 
   // Check if selected asset needs fee payment
@@ -310,7 +337,16 @@ export function BridgeAssetsOutDialog({
           amount: getRawAmount()!,
           daoId,
           ...(needsFeePaying && selectedFeeAsset
-            ? { feeAssetId: selectedFeeAsset.id }
+            ? {
+                feeAssetId: selectedFeeAsset.id,
+                // If using fee asset would leave balance below ED, use entire balance
+                feeAmount:
+                  selectedFeeAsset.value.free -
+                    calculateFeeAmount(selectedFeeAsset.id) <
+                  selectedFeeAsset.metadata.existential_deposit
+                    ? selectedFeeAsset.value.free
+                    : calculateFeeAmount(selectedFeeAsset.id),
+              }
             : {}),
           onStatusChange: handleBridgeStatusChange,
           onComplete: () => {
@@ -859,7 +895,7 @@ export function BridgeAssetsOutDialog({
                       fontSize: "0.875rem",
                     })}
                   >
-                    No fee payment assets available. You need either USDC or
+                    No fee payment assets available. You need either 0.1 USDC or
                     USDT to bridge this asset.
                   </p>
                 )}
