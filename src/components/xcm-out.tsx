@@ -5,6 +5,8 @@ import {
   useInvArchBridgeOutOperation,
   type BridgeStatusChange,
   isBridgeSupportedOut,
+  canPayFees,
+  needsFeePayment,
 } from "../features/xcm/bridge-utils";
 import { Button } from "./button";
 import { ModalDialog } from "./modal-dialog";
@@ -91,6 +93,17 @@ export function BridgeAssetsOutDialog({
     };
   } | null>(null);
 
+  // Add state for fee asset selection
+  const [selectedFeeAsset, setSelectedFeeAsset] = useState<{
+    id: number;
+    metadata: {
+      symbol: string;
+      decimals: number;
+      name: string;
+      existential_deposit: bigint;
+    };
+  } | null>(null);
+
   const [amount, setAmount] = useState("");
   const [destinationAccount, setDestinationAccount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -122,7 +135,7 @@ export function BridgeAssetsOutDialog({
     }
   };
 
-  // Query DAO's token balances with proper typing
+  // Get the DAO's token balances with proper typing
   const daoTokensResult = useLazyLoadQuery((builder) => {
     if (!coreStorage?.account) return null;
     return builder.readStorageEntries("Tokens", "Accounts", [
@@ -204,6 +217,19 @@ export function BridgeAssetsOutDialog({
 
     return assets;
   };
+
+  // Get available fee assets
+  const getAvailableFeeAssets = useMemo(() => {
+    if (!daoTokens || !assetMetadata) return [];
+
+    return getAvailableAssets().filter((asset) => canPayFees(asset.id));
+  }, [daoTokens, assetMetadata]);
+
+  // Check if selected asset needs fee payment
+  const needsFeePaying = useMemo(() => {
+    if (!selectedAsset) return false;
+    return needsFeePayment(selectedAsset.id);
+  }, [selectedAsset]);
 
   // Calculate max amount considering existential deposit
   const _maxAmount = useMemo(() => {
@@ -292,43 +318,29 @@ export function BridgeAssetsOutDialog({
     }
   };
 
-  // Only provide bridge parameters when they're all valid
-  const getBridgeParams = () => {
-    const rawAmount = getRawAmount();
-
-    // Add debugging information
-    console.log("Raw amount:", rawAmount);
-    console.log("Selected asset:", selectedAsset);
-    console.log("Destination account:", destinationAccount);
-
-    if (!rawAmount || !destinationAccount || !selectedAsset) {
-      console.log("Missing required parameters", {
-        rawAmount,
-        destinationAccount,
-        selectedAsset,
-      });
-      return undefined;
-    }
-
-    return {
-      destinationAccount,
-      assetId: BigInt(selectedAsset.id),
-      amount: rawAmount,
-      daoId,
-      onStatusChange: handleBridgeStatusChange,
-      onComplete: () => {
-        setIsProcessing(false);
-        showNotification({
-          variant: "success",
-          message: `Bridge out of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
-        });
-        onClose();
-      },
-    };
-  };
-
   // Set up the InvArch bridge out operation with the current parameters
-  const invArchBridge = useInvArchBridgeOutOperation(getBridgeParams());
+  const invArchBridge = useInvArchBridgeOutOperation(
+    selectedAsset && destinationAccount && getRawAmount()
+      ? {
+          destinationAccount,
+          assetId: BigInt(selectedAsset.id),
+          amount: getRawAmount()!,
+          daoId,
+          ...(needsFeePaying && selectedFeeAsset
+            ? { feeAssetId: selectedFeeAsset.id }
+            : {}),
+          onStatusChange: handleBridgeStatusChange,
+          onComplete: () => {
+            setIsProcessing(false);
+            showNotification({
+              variant: "success",
+              message: `Bridge out of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
+            });
+            onClose();
+          },
+        }
+      : undefined,
+  );
 
   // Handle bridge operation
   const handleBridgeOut = async () => {
@@ -363,10 +375,13 @@ export function BridgeAssetsOutDialog({
     }
 
     try {
-      console.log(
-        "Starting bridge out execution with params:",
-        getBridgeParams(),
-      );
+      console.log("Starting bridge out execution with params:", {
+        destinationAccount,
+        assetId: selectedAsset?.id,
+        amount: rawAmount,
+        daoId,
+        feeAssetId: selectedFeeAsset?.id,
+      });
       // Execute the bridge operation
       await invArchBridge.executeBridgeOut();
     } catch (error) {
@@ -385,9 +400,11 @@ export function BridgeAssetsOutDialog({
   const canProceed = () => {
     if (step === "select-asset") return !!selectedAsset;
     if (step === "enter-amount") {
-      return (
-        !!amount && parseFloat(amount) > 0 && destinationAccount.length > 0
-      );
+      const hasValidAmount = !!amount && parseFloat(amount) > 0;
+      const hasDestination = destinationAccount.length > 0;
+      const hasFeeAsset =
+        !needsFeePaying || (needsFeePaying && selectedFeeAsset);
+      return hasValidAmount && hasDestination && hasFeeAsset;
     }
     return true;
   };
@@ -740,6 +757,133 @@ export function BridgeAssetsOutDialog({
               </div>
             )}
 
+            {needsFeePaying && (
+              <div
+                className={css({
+                  marginTop: "1rem",
+                  padding: "1rem",
+                  backgroundColor: "surfaceContainer",
+                  borderRadius: "xl",
+                  border: "1px solid token(colors.surfaceContainerHighest)",
+                })}
+              >
+                <h4
+                  className={css({
+                    fontSize: "0.9rem",
+                    fontWeight: "500",
+                    color: "content.muted",
+                    marginBottom: "0.75rem",
+                  })}
+                >
+                  Select Fee Payment Asset
+                </h4>
+                <p
+                  className={css({
+                    fontSize: "0.85rem",
+                    color: "content.muted",
+                    marginBottom: "1rem",
+                  })}
+                >
+                  This asset requires a fee payment token to bridge. Please
+                  select one:
+                </p>
+                <div
+                  className={css({
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.75rem",
+                  })}
+                >
+                  {getAvailableFeeAssets.map((asset) => {
+                    const iconPath = getTokenIcon(asset.metadata.symbol);
+
+                    return (
+                      <button
+                        key={asset.id}
+                        onClick={() => setSelectedFeeAsset(asset)}
+                        className={css({
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "0.75rem 1rem",
+                          backgroundColor:
+                            selectedFeeAsset?.id === asset.id
+                              ? "primary"
+                              : "surfaceContainerHigh",
+                          color:
+                            selectedFeeAsset?.id === asset.id
+                              ? "onPrimary"
+                              : "content",
+                          border: "none",
+                          borderRadius: "lg",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          "&:hover": {
+                            backgroundColor:
+                              selectedFeeAsset?.id === asset.id
+                                ? "primary"
+                                : "surfaceContainerHighest",
+                          },
+                        })}
+                      >
+                        <div
+                          className={css({
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.75rem",
+                          })}
+                        >
+                          {iconPath && (
+                            <img
+                              src={iconPath}
+                              alt={`${asset.metadata.symbol} icon`}
+                              className={css({
+                                width: "1.5rem",
+                                height: "1.5rem",
+                                objectFit: "contain",
+                              })}
+                            />
+                          )}
+                          <span className={css({ fontWeight: "500" })}>
+                            {asset.metadata.symbol}
+                          </span>
+                        </div>
+                        <span
+                          className={css({
+                            fontSize: "0.875rem",
+                            color:
+                              selectedFeeAsset?.id === asset.id
+                                ? "onPrimary"
+                                : "content.muted",
+                          })}
+                        >
+                          {new DenominatedNumber(
+                            asset.value.free,
+                            asset.metadata.decimals,
+                          ).toLocaleString()}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {getAvailableFeeAssets.length === 0 && (
+                  <p
+                    className={css({
+                      textAlign: "center",
+                      color: "error",
+                      padding: "1rem",
+                      backgroundColor: "surfaceContainer",
+                      borderRadius: "md",
+                      fontSize: "0.875rem",
+                    })}
+                  >
+                    No fee payment assets available. You need either DOT, USDC,
+                    or USDT to bridge this asset.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div
               className={css({
                 fontSize: "0.85rem",
@@ -958,6 +1102,20 @@ export function BridgeAssetsOutDialog({
                     : "Loading..."}
                 </span>
               </div>
+
+              {needsFeePaying && selectedFeeAsset && (
+                <div
+                  className={css({
+                    display: "flex",
+                    justifyContent: "space-between",
+                  })}
+                >
+                  <span>Fee Payment Asset:</span>
+                  <span>
+                    {selectedFeeAsset.metadata.symbol} (estimated fee: 0.18)
+                  </span>
+                </div>
+              )}
             </div>
             <p
               className={css({
