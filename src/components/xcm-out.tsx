@@ -7,6 +7,7 @@ import {
   isBridgeSupportedOut,
   canPayFees,
   needsFeePayment,
+  calculateFeeAmount,
 } from "../features/xcm/bridge-utils";
 import { Button } from "./button";
 import { ModalDialog } from "./modal-dialog";
@@ -38,6 +39,7 @@ const getTokenIcon = (symbol: string) => {
 
 interface BridgeAssetsOutDialogProps {
   daoId: number;
+  daoAddress: string;
   onClose: () => void;
 }
 
@@ -81,6 +83,7 @@ interface Asset {
 
 export function BridgeAssetsOutDialog({
   daoId,
+  daoAddress,
   onClose,
 }: BridgeAssetsOutDialogProps) {
   const [selectedAsset, setSelectedAsset] = useState<{
@@ -111,12 +114,6 @@ export function BridgeAssetsOutDialog({
     "select-asset",
   );
   const { showNotification } = useNotification();
-
-  // Get the DAO's core storage to access its account
-  const coreStorage = useLazyLoadQuery((builder) =>
-    builder.readStorage("INV4", "CoreStorage", [daoId]),
-  );
-
   // Add destination chain constant - can be made dynamic in the future
   const destinationChain = "Asset Hub";
 
@@ -137,10 +134,8 @@ export function BridgeAssetsOutDialog({
 
   // Get the DAO's token balances with proper typing
   const daoTokensResult = useLazyLoadQuery((builder) => {
-    if (!coreStorage?.account) return null;
-    return builder.readStorageEntries("Tokens", "Accounts", [
-      coreStorage.account,
-    ]);
+    if (!daoAddress) return null;
+    return builder.readStorageEntries("Tokens", "Accounts", [daoAddress]);
   }) as unknown as TokenBalance[] | null;
 
   // Memoize the processed tokens to prevent unnecessary re-renders
@@ -877,8 +872,8 @@ export function BridgeAssetsOutDialog({
                       fontSize: "0.875rem",
                     })}
                   >
-                    No fee payment assets available. You need either DOT, USDC,
-                    or USDT to bridge this asset.
+                    No fee payment assets available. You need either USDC or
+                    USDT to bridge this asset.
                   </p>
                 )}
               </div>
@@ -1083,8 +1078,8 @@ export function BridgeAssetsOutDialog({
                 <span>From:</span>
                 <span>
                   DAO Account:{" "}
-                  {coreStorage?.account
-                    ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}`
+                  {daoAddress
+                    ? `${daoAddress.substring(0, 6)}...${daoAddress.substring(daoAddress.length - 6)}`
                     : "Loading..."}
                 </span>
               </div>
@@ -1112,7 +1107,12 @@ export function BridgeAssetsOutDialog({
                 >
                   <span>Fee Payment Asset:</span>
                   <span>
-                    {selectedFeeAsset.metadata.symbol} (estimated fee: 0.18)
+                    {selectedFeeAsset.metadata.symbol} (estimated fee:{" "}
+                    {new DenominatedNumber(
+                      calculateFeeAmount(selectedFeeAsset.id),
+                      selectedFeeAsset.metadata.decimals,
+                    ).toLocaleString()}
+                    )
                   </span>
                 </div>
               )}

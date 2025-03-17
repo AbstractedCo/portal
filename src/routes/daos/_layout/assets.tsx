@@ -312,7 +312,7 @@ function AssetsPage() {
 
           {bridgeInDialogOpen && (
             <BridgeAssetsInDialog
-              daoId={daoId!}
+              daoAddress={coreStorage!.account}
               onClose={() => setBridgeInDialogOpen(false)}
             />
           )}
@@ -320,6 +320,7 @@ function AssetsPage() {
           {bridgeOutDialogOpen && (
             <BridgeAssetsOutDialog
               daoId={daoId!}
+              daoAddress={coreStorage!.account}
               onClose={() => setBridgeOutDialogOpen(false)}
             />
           )}

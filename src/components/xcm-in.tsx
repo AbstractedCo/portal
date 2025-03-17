@@ -44,12 +44,12 @@ const getTokenIcon = (symbol: string) => {
 };
 
 interface BridgeAssetsInDialogProps {
-  daoId: number;
+  daoAddress: string;
   onClose: () => void;
 }
 
 export function BridgeAssetsInDialog({
-  daoId,
+  daoAddress,
   onClose,
 }: BridgeAssetsInDialogProps) {
   const [selectedAsset, setSelectedAsset] = useState<{
@@ -75,16 +75,9 @@ export function BridgeAssetsInDialog({
   const registeredAssets = useLazyLoadRegisteredAssets();
   const selectedAccount = useAtomValue(selectedAccountAtom);
 
-  // Get the DAO's core storage to access its account
-  const coreStorage = useLazyLoadQuery((builder) =>
-    builder.readStorage("INV4", "CoreStorage", [daoId]),
-  );
-
   // Query user's native VARCH balance
   const nativeBalance = useLazyLoadQuery((builder) =>
-    selectedAccount?.address
-      ? builder.readStorage("System", "Account", [selectedAccount.address])
-      : null,
+    daoAddress ? builder.readStorage("System", "Account", [daoAddress]) : null,
   );
 
   // Get the asset ID for the selected asset
@@ -222,7 +215,7 @@ export function BridgeAssetsInDialog({
   // Set up the transfer mutation for native VARCH
   const [_nativeTransferState, executeNativeTransfer] = useMutation(
     (builder) => {
-      if (!coreStorage?.account || !amount || !selectedAccount?.address) {
+      if (!daoAddress || !amount || !selectedAccount?.address) {
         throw new Error("Missing required parameters for transfer");
       }
 
@@ -235,7 +228,7 @@ export function BridgeAssetsInDialog({
       return builder.Balances.transfer_keep_alive({
         dest: {
           type: "Id",
-          value: coreStorage.account,
+          value: daoAddress,
         },
         value: rawAmount,
       });
@@ -290,7 +283,7 @@ export function BridgeAssetsInDialog({
   const getBridgeParams = () => {
     const assetId = getAssetId();
     const rawAmount = getRawAmount();
-    const beneficiaryAccount = coreStorage?.account;
+    const beneficiaryAccount = daoAddress;
 
     // Add debugging information
     console.log("Asset ID:", assetId);
@@ -345,7 +338,7 @@ export function BridgeAssetsInDialog({
 
   // Handle bridge operation
   const handleBridgeIn = async () => {
-    if (!selectedAsset || !coreStorage || !amount || !selectedAccount) {
+    if (!selectedAsset || !daoAddress || !amount || !selectedAccount) {
       showNotification({
         variant: "error",
         message:
@@ -1037,8 +1030,8 @@ export function BridgeAssetsInDialog({
                 <span>To:</span>
                 <span>
                   DAO Account:{" "}
-                  {coreStorage?.account
-                    ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}`
+                  {daoAddress
+                    ? `${daoAddress.toString().substring(0, 6)}...${daoAddress.toString().substring(daoAddress.toString().length - 6)}`
                     : "Loading..."}
                 </span>
               </div>

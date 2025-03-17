@@ -1,3 +1,4 @@
+import { canPayFees, needsFeePayment, calculateFeeAmount } from "./fee-assets";
 import { CHAIN_CONFIG, isAssetFromAssetHub } from "./xcm-utils";
 import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
 import { MutationError, pending } from "@reactive-dot/core";
@@ -292,24 +293,8 @@ export function useAssetHubBridgeInOperation(params?: BridgeParams) {
   };
 }
 
-// Add constants for fee payment assets
-export const ASSET_HUB_FEE_ASSETS = {
-  DOT: { id: 3, symbol: "DOT" },
-  USDT: { id: 2, symbol: "USDT" },
-  USDC: { id: 1, symbol: "USDC" },
-} as const;
-
-// Helper to check if an asset can be used for fee payment
-export function canPayFees(assetId: number): boolean {
-  return Object.values(ASSET_HUB_FEE_ASSETS).some(
-    (asset) => asset.id === assetId,
-  );
-}
-
-// Helper to check if an asset needs fee payment for bridging
-export function needsFeePayment(assetId: number): boolean {
-  return !canPayFees(assetId);
-}
+// Export fee-related functions from fee-assets.ts
+export { canPayFees, needsFeePayment, calculateFeeAmount };
 
 // Custom hook for bridging assets out from InvArch to Asset Hub
 export function useInvArchBridgeOutOperation(
@@ -369,8 +354,8 @@ export function useInvArchBridgeOutOperation(
         );
       }
 
-      // Calculate fee amount (this should be properly calculated based on the asset)
-      const feeAmount = 180000n; // Example fee amount, should be properly calculated
+      // Calculate fee amount using the fee-assets module
+      const feeAmount = calculateFeeAmount(feeAssetId);
 
       // Use transfer_multicurrencies for assets that need fee payment
       const transferMultiCall = builder.XTokens.transfer_multicurrencies({
