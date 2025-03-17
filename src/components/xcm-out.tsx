@@ -12,30 +12,13 @@ import {
 import { Button } from "./button";
 import { ModalDialog } from "./modal-dialog";
 import { TextInput } from "./text-input";
+import { TokenIcon } from "./token-icon";
 import { useLazyLoadQuery } from "@reactive-dot/react";
 import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import type { Binary, SS58String } from "polkadot-api";
 import { useState, useEffect, useMemo } from "react";
-
-// Helper function to get the appropriate icon for a token
-const getTokenIcon = (symbol: string) => {
-  const normalizedSymbol = symbol.toUpperCase();
-
-  switch (normalizedSymbol) {
-    case "DOT":
-      return "/polkadot-new-dot-logo.svg";
-    case "USDT":
-      return "/tether-usdt-logo.svg";
-    case "USDC":
-      return "/usd-coin-usdc-logo.svg";
-    case "VARCH":
-      return "/invarch-logo.svg";
-    default:
-      return null;
-  }
-};
 
 interface BridgeAssetsOutDialogProps {
   daoId: number;
@@ -575,77 +558,63 @@ export function BridgeAssetsOutDialog({
                     gap: "0.75rem",
                   })}
                 >
-                  {availableAssets.map((asset) => {
-                    const iconPath = getTokenIcon(asset.metadata.symbol);
-
-                    return (
-                      <button
-                        key={asset.id}
-                        onClick={() => setSelectedAsset(asset)}
-                        className={css({
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "0.75rem 1rem",
+                  {availableAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      onClick={() => setSelectedAsset(asset)}
+                      className={css({
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "0.75rem 1rem",
+                        backgroundColor:
+                          selectedAsset?.id === asset.id
+                            ? "primary"
+                            : "surfaceContainerHigh",
+                        color:
+                          selectedAsset?.id === asset.id
+                            ? "onPrimary"
+                            : "content",
+                        border: "none",
+                        borderRadius: "lg",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        "&:hover": {
                           backgroundColor:
                             selectedAsset?.id === asset.id
                               ? "primary"
-                              : "surfaceContainerHigh",
+                              : "surfaceContainerHighest",
+                        },
+                      })}
+                    >
+                      <div
+                        className={css({
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                        })}
+                      >
+                        <TokenIcon symbol={asset.metadata.symbol} size="md" />
+                        <span className={css({ fontWeight: "500" })}>
+                          {asset.metadata.symbol}
+                        </span>
+                      </div>
+                      <span
+                        className={css({
+                          fontSize: "0.875rem",
                           color:
                             selectedAsset?.id === asset.id
                               ? "onPrimary"
-                              : "content",
-                          border: "none",
-                          borderRadius: "lg",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          "&:hover": {
-                            backgroundColor:
-                              selectedAsset?.id === asset.id
-                                ? "primary"
-                                : "surfaceContainerHighest",
-                          },
+                              : "content.muted",
                         })}
                       >
-                        <div
-                          className={css({
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.75rem",
-                          })}
-                        >
-                          {iconPath && (
-                            <img
-                              src={iconPath || ""}
-                              alt={`${asset.metadata.symbol} icon`}
-                              className={css({
-                                width: "1.5rem",
-                                height: "1.5rem",
-                                objectFit: "contain",
-                              })}
-                            />
-                          )}
-                          <span className={css({ fontWeight: "500" })}>
-                            {asset.metadata.symbol}
-                          </span>
-                        </div>
-                        <span
-                          className={css({
-                            fontSize: "0.875rem",
-                            color:
-                              selectedAsset?.id === asset.id
-                                ? "onPrimary"
-                                : "content.muted",
-                          })}
-                        >
-                          {new DenominatedNumber(
-                            asset.value.free,
-                            asset.metadata.decimals,
-                          ).toLocaleString()}
-                        </span>
-                      </button>
-                    );
-                  })}
+                        {new DenominatedNumber(
+                          asset.value.free,
+                          asset.metadata.decimals,
+                        ).toLocaleString()}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -789,77 +758,63 @@ export function BridgeAssetsOutDialog({
                     gap: "0.75rem",
                   })}
                 >
-                  {getAvailableFeeAssets.map((asset) => {
-                    const iconPath = getTokenIcon(asset.metadata.symbol);
-
-                    return (
-                      <button
-                        key={asset.id}
-                        onClick={() => setSelectedFeeAsset(asset)}
-                        className={css({
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "0.75rem 1rem",
+                  {getAvailableFeeAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      onClick={() => setSelectedFeeAsset(asset)}
+                      className={css({
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "0.75rem 1rem",
+                        backgroundColor:
+                          selectedFeeAsset?.id === asset.id
+                            ? "primary"
+                            : "surfaceContainerHigh",
+                        color:
+                          selectedFeeAsset?.id === asset.id
+                            ? "onPrimary"
+                            : "content",
+                        border: "none",
+                        borderRadius: "lg",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        "&:hover": {
                           backgroundColor:
                             selectedFeeAsset?.id === asset.id
                               ? "primary"
-                              : "surfaceContainerHigh",
+                              : "surfaceContainerHighest",
+                        },
+                      })}
+                    >
+                      <div
+                        className={css({
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                        })}
+                      >
+                        <TokenIcon symbol={asset.metadata.symbol} size="md" />
+                        <span className={css({ fontWeight: "500" })}>
+                          {asset.metadata.symbol}
+                        </span>
+                      </div>
+                      <span
+                        className={css({
+                          fontSize: "0.875rem",
                           color:
                             selectedFeeAsset?.id === asset.id
                               ? "onPrimary"
-                              : "content",
-                          border: "none",
-                          borderRadius: "lg",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          "&:hover": {
-                            backgroundColor:
-                              selectedFeeAsset?.id === asset.id
-                                ? "primary"
-                                : "surfaceContainerHighest",
-                          },
+                              : "content.muted",
                         })}
                       >
-                        <div
-                          className={css({
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.75rem",
-                          })}
-                        >
-                          {iconPath && (
-                            <img
-                              src={iconPath}
-                              alt={`${asset.metadata.symbol} icon`}
-                              className={css({
-                                width: "1.5rem",
-                                height: "1.5rem",
-                                objectFit: "contain",
-                              })}
-                            />
-                          )}
-                          <span className={css({ fontWeight: "500" })}>
-                            {asset.metadata.symbol}
-                          </span>
-                        </div>
-                        <span
-                          className={css({
-                            fontSize: "0.875rem",
-                            color:
-                              selectedFeeAsset?.id === asset.id
-                                ? "onPrimary"
-                                : "content.muted",
-                          })}
-                        >
-                          {new DenominatedNumber(
-                            asset.value.free,
-                            asset.metadata.decimals,
-                          ).toLocaleString()}
-                        </span>
-                      </button>
-                    );
-                  })}
+                        {new DenominatedNumber(
+                          asset.value.free,
+                          asset.metadata.decimals,
+                        ).toLocaleString()}
+                      </span>
+                    </button>
+                  ))}
                 </div>
                 {getAvailableFeeAssets.length === 0 && (
                   <p
@@ -909,6 +864,24 @@ export function BridgeAssetsOutDialog({
                 >
                   Use max amount
                 </button>
+              )}
+              {selectedAsset && needsFeePayment(selectedAsset.id) && (
+                <div
+                  className={css({
+                    fontSize: "0.85rem",
+                    color: "warning",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    marginTop: "0.5rem",
+                    backgroundColor: "warningContainer",
+                    padding: "0.75rem",
+                    borderRadius: "md",
+                  })}
+                >
+                  ⚠️ This asset requires USDT/USDC for bridging fees. Make sure
+                  you have enough fee tokens available.
+                </div>
               )}
             </div>
             <div
@@ -1040,18 +1013,12 @@ export function BridgeAssetsOutDialog({
                     gap: "0.5rem",
                   })}
                 >
-                  {selectedAsset &&
-                    getTokenIcon(selectedAsset.metadata.symbol) && (
-                      <img
-                        src={getTokenIcon(selectedAsset.metadata.symbol) || ""}
-                        alt={`${selectedAsset.metadata.symbol} icon`}
-                        className={css({
-                          width: "1.25rem",
-                          height: "1.25rem",
-                          objectFit: "contain",
-                        })}
-                      />
-                    )}
+                  {selectedAsset && (
+                    <TokenIcon
+                      symbol={selectedAsset.metadata.symbol}
+                      size="md"
+                    />
+                  )}
                   <span className={css({ fontWeight: "500" })}>
                     {selectedAsset?.metadata.symbol}
                   </span>
@@ -1253,18 +1220,13 @@ export function BridgeAssetsOutDialog({
             gap: "0.75rem",
           })}
         >
-          {selectedAsset && getTokenIcon(selectedAsset.metadata.symbol) && (
-            <img
-              src={getTokenIcon(selectedAsset.metadata.symbol) || ""}
-              alt={`${selectedAsset.metadata.symbol} icon`}
-              className={css({
-                width: "1.5rem",
-                height: "1.5rem",
-                objectFit: "contain",
-              })}
-            />
+          {selectedAsset && (
+            <>
+              <TokenIcon symbol={selectedAsset.metadata.symbol} size="md" />
+              <span>Bridge Your Assets Out of DAO</span>
+            </>
           )}
-          <span>Bridge Your Assets Out of DAO</span>
+          {!selectedAsset && <span>Bridge Your Assets Out of DAO</span>}
         </div>
       }
       onClose={onClose}
