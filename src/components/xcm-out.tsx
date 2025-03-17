@@ -5,37 +5,25 @@ import {
   useInvArchBridgeOutOperation,
   type BridgeStatusChange,
   isBridgeSupportedOut,
+  canPayFees,
+  needsFeePayment,
+  calculateFeeAmount,
 } from "../features/xcm/bridge-utils";
+import { validateFeeBalance } from "../features/xcm/fee-assets";
 import { Button } from "./button";
 import { ModalDialog } from "./modal-dialog";
 import { TextInput } from "./text-input";
+import { TokenIcon } from "./token-icon";
 import { useLazyLoadQuery } from "@reactive-dot/react";
 import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 import type { Binary, SS58String } from "polkadot-api";
-import { useState, useEffect, useMemo } from "react";
-
-// Helper function to get the appropriate icon for a token
-const getTokenIcon = (symbol: string) => {
-  const normalizedSymbol = symbol.toUpperCase();
-
-  switch (normalizedSymbol) {
-    case "DOT":
-      return "/polkadot-new-dot-logo.svg";
-    case "USDT":
-      return "/tether-usdt-logo.svg";
-    case "USDC":
-      return "/usd-coin-usdc-logo.svg";
-    case "VARCH":
-      return "/invarch-logo.svg";
-    default:
-      return null;
-  }
-};
+import { useState, useEffect, useMemo, useCallback } from "react";
 
 interface BridgeAssetsOutDialogProps {
   daoId: number;
+  daoAddress: string;
   onClose: () => void;
 }
 
@@ -79,10 +67,27 @@ interface Asset {
 
 export function BridgeAssetsOutDialog({
   daoId,
+  daoAddress,
   onClose,
 }: BridgeAssetsOutDialogProps) {
   const [selectedAsset, setSelectedAsset] = useState<{
     id: number;
+    metadata: {
+      symbol: string;
+      decimals: number;
+      name: string;
+      existential_deposit: bigint;
+    };
+  } | null>(null);
+
+  // Add state for fee asset selection
+  const [selectedFeeAsset, setSelectedFeeAsset] = useState<{
+    id: number;
+    value: {
+      free: bigint;
+      reserved: bigint;
+      frozen: bigint;
+    };
     metadata: {
       symbol: string;
       decimals: number;
@@ -98,12 +103,6 @@ export function BridgeAssetsOutDialog({
     "select-asset",
   );
   const { showNotification } = useNotification();
-
-  // Get the DAO's core storage to access its account
-  const coreStorage = useLazyLoadQuery((builder) =>
-    builder.readStorage("INV4", "CoreStorage", [daoId]),
-  );
-
   // Add destination chain constant - can be made dynamic in the future
   const destinationChain = "Asset Hub";
 
@@ -122,12 +121,10 @@ export function BridgeAssetsOutDialog({
     }
   };
 
-  // Query DAO's token balances with proper typing
+  // Get the DAO's token balances with proper typing
   const daoTokensResult = useLazyLoadQuery((builder) => {
-    if (!coreStorage?.account) return null;
-    return builder.readStorageEntries("Tokens", "Accounts", [
-      coreStorage.account,
-    ]);
+    if (!daoAddress) return null;
+    return builder.readStorageEntries("Tokens", "Accounts", [daoAddress]);
   }) as unknown as TokenBalance[] | null;
 
   // Memoize the processed tokens to prevent unnecessary re-renders
@@ -150,7 +147,7 @@ export function BridgeAssetsOutDialog({
   );
 
   // Combine tokens with their metadata
-  const getAvailableAssets = (): Asset[] => {
+  const getAvailableAssets = useCallback((): Asset[] => {
     if (!daoTokens || !assetMetadata) return [];
 
     const assets: Asset[] = [];
@@ -203,29 +200,72 @@ export function BridgeAssetsOutDialog({
     }
 
     return assets;
-  };
+  }, [daoTokens, assetMetadata]);
 
-  // Get formatted balance for display
-  const getFormattedBalance = () => {
-    try {
-      if (!selectedAsset || !daoTokens) return "Loading...";
+  // Get available fee assets
+  const getAvailableFeeAssets = useMemo(() => {
+    if (!daoTokens || !assetMetadata) return [];
 
-      const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
-      if (!token || !token.value || !token.value.free) return "Loading...";
+    return getAvailableAssets().filter((asset) => {
+      // First check if the asset can be used for fees
+      if (!canPayFees(asset.id)) return false;
 
-      return (
-        new DenominatedNumber(
-          token.value.free,
-          selectedAsset.metadata.decimals,
-        ).toLocaleString() +
-        " " +
-        selectedAsset.metadata.symbol
-      );
-    } catch (error) {
-      console.warn("Error formatting balance:", error);
-      return "Error loading balance";
-    }
-  };
+      // Calculate minimum fee amount needed
+      const minFeeAmount = calculateFeeAmount(asset.id);
+
+      // Check if using this asset for fees would leave balance below ED
+      const remainingBalance = asset.value.free - minFeeAmount;
+      const isRemainderBelowED =
+        remainingBalance > 0n &&
+        remainingBalance < asset.metadata.existential_deposit;
+
+      // If remainder would be below ED, use entire balance as fee
+      if (isRemainderBelowED) {
+        // Validate if entire balance is enough for fees
+        return validateFeeBalance(asset.id, asset.value.free);
+      }
+
+      // Otherwise validate with normal fee amount
+      return validateFeeBalance(asset.id, asset.value.free);
+    });
+  }, [daoTokens, assetMetadata, getAvailableAssets]);
+
+  // Check if selected asset needs fee payment
+  const needsFeePaying = useMemo(() => {
+    if (!selectedAsset) return false;
+    return needsFeePayment(selectedAsset.id);
+  }, [selectedAsset]);
+
+  // Calculate max amount considering existential deposit
+  const maxAmount = useMemo(() => {
+    if (!selectedAsset || !daoTokens) return "0";
+
+    const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
+    if (!token?.value?.free) return "0";
+
+    return new DenominatedNumber(
+      token.value.free,
+      selectedAsset.metadata.decimals,
+    ).toString();
+  }, [selectedAsset, daoTokens]);
+
+  // Update maxAmountValue whenever maxAmount changes
+  useEffect(() => {
+    setMaxAmountValue(maxAmount);
+  }, [maxAmount]);
+
+  // Format balance for display separately
+  const formattedBalance = useMemo(() => {
+    if (!selectedAsset || !daoTokens) return "Loading...";
+
+    const token = daoTokens.find((t) => t?.keyArgs?.[1] === selectedAsset.id);
+    if (!token?.value?.free) return "Loading...";
+
+    return new DenominatedNumber(
+      token.value.free,
+      selectedAsset.metadata.decimals,
+    ).toLocaleString();
+  }, [selectedAsset, daoTokens]);
 
   // Convert amount to proper decimals
   const getRawAmount = () => {
@@ -288,43 +328,38 @@ export function BridgeAssetsOutDialog({
     }
   };
 
-  // Only provide bridge parameters when they're all valid
-  const getBridgeParams = () => {
-    const rawAmount = getRawAmount();
-
-    // Add debugging information
-    console.log("Raw amount:", rawAmount);
-    console.log("Selected asset:", selectedAsset);
-    console.log("Destination account:", destinationAccount);
-
-    if (!rawAmount || !destinationAccount || !selectedAsset) {
-      console.log("Missing required parameters", {
-        rawAmount,
-        destinationAccount,
-        selectedAsset,
-      });
-      return undefined;
-    }
-
-    return {
-      destinationAccount,
-      assetId: BigInt(selectedAsset.id),
-      amount: rawAmount,
-      daoId,
-      onStatusChange: handleBridgeStatusChange,
-      onComplete: () => {
-        setIsProcessing(false);
-        showNotification({
-          variant: "success",
-          message: `Bridge out of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
-        });
-        onClose();
-      },
-    };
-  };
-
   // Set up the InvArch bridge out operation with the current parameters
-  const invArchBridge = useInvArchBridgeOutOperation(getBridgeParams());
+  const invArchBridge = useInvArchBridgeOutOperation(
+    selectedAsset && destinationAccount && getRawAmount()
+      ? {
+          destinationAccount,
+          assetId: BigInt(selectedAsset.id),
+          amount: getRawAmount()!,
+          daoId,
+          ...(needsFeePaying && selectedFeeAsset
+            ? {
+                feeAssetId: selectedFeeAsset.id,
+                // If using fee asset would leave balance below ED, use entire balance
+                feeAmount:
+                  selectedFeeAsset.value.free -
+                    calculateFeeAmount(selectedFeeAsset.id) <
+                  selectedFeeAsset.metadata.existential_deposit
+                    ? selectedFeeAsset.value.free
+                    : calculateFeeAmount(selectedFeeAsset.id),
+              }
+            : {}),
+          onStatusChange: handleBridgeStatusChange,
+          onComplete: () => {
+            setIsProcessing(false);
+            showNotification({
+              variant: "success",
+              message: `Bridge out of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
+            });
+            onClose();
+          },
+        }
+      : undefined,
+  );
 
   // Handle bridge operation
   const handleBridgeOut = async () => {
@@ -359,10 +394,13 @@ export function BridgeAssetsOutDialog({
     }
 
     try {
-      console.log(
-        "Starting bridge out execution with params:",
-        getBridgeParams(),
-      );
+      console.log("Starting bridge out execution with params:", {
+        destinationAccount,
+        assetId: selectedAsset?.id,
+        amount: rawAmount,
+        daoId,
+        feeAssetId: selectedFeeAsset?.id,
+      });
       // Execute the bridge operation
       await invArchBridge.executeBridgeOut();
     } catch (error) {
@@ -381,9 +419,11 @@ export function BridgeAssetsOutDialog({
   const canProceed = () => {
     if (step === "select-asset") return !!selectedAsset;
     if (step === "enter-amount") {
-      return (
-        !!amount && parseFloat(amount) > 0 && destinationAccount.length > 0
-      );
+      const hasValidAmount = !!amount && parseFloat(amount) > 0;
+      const hasDestination = destinationAccount.length > 0;
+      const hasFeeAsset =
+        !needsFeePaying || (needsFeePaying && selectedFeeAsset);
+      return hasValidAmount && hasDestination && hasFeeAsset;
     }
     return true;
   };
@@ -441,8 +481,8 @@ export function BridgeAssetsOutDialog({
       token.value.free,
       selectedAsset.metadata.decimals,
     );
-    const currentBalanceValue = parseFloat(currentBalance.toLocaleString());
-    const maxAmount = currentBalance.toLocaleString();
+    const currentBalanceValue = parseFloat(currentBalance.toString());
+    const maxAmount = currentBalance.toString();
 
     if (!amount) {
       return { isRemainderBelowED: false, maxAmount };
@@ -453,7 +493,7 @@ export function BridgeAssetsOutDialog({
       selectedAsset.metadata.existential_deposit,
       selectedAsset.metadata.decimals,
     );
-    const existentialDepositValue = parseFloat(edDenominated.toLocaleString());
+    const existentialDepositValue = parseFloat(edDenominated.toString());
     const remainingBalance = currentBalanceValue - amountValue;
 
     return {
@@ -559,36 +599,41 @@ export function BridgeAssetsOutDialog({
                     gap: "0.75rem",
                   })}
                 >
-                  {availableAssets.map((asset) => {
-                    const iconPath = getTokenIcon(asset.metadata.symbol);
-
-                    return (
-                      <button
-                        key={asset.id}
-                        onClick={() => setSelectedAsset(asset)}
+                  {availableAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      onClick={() => setSelectedAsset(asset)}
+                      className={css({
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.5rem",
+                        padding: "0.75rem 1rem",
+                        backgroundColor:
+                          selectedAsset?.id === asset.id
+                            ? "primary"
+                            : "surfaceContainerHigh",
+                        color:
+                          selectedAsset?.id === asset.id
+                            ? "onPrimary"
+                            : "content",
+                        border: "none",
+                        borderRadius: "lg",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        "&:hover": {
+                          backgroundColor:
+                            selectedAsset?.id === asset.id
+                              ? "primary"
+                              : "surfaceContainerHighest",
+                        },
+                      })}
+                    >
+                      <div
                         className={css({
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
-                          padding: "0.75rem 1rem",
-                          backgroundColor:
-                            selectedAsset?.id === asset.id
-                              ? "primary"
-                              : "surfaceContainerHigh",
-                          color:
-                            selectedAsset?.id === asset.id
-                              ? "onPrimary"
-                              : "content",
-                          border: "none",
-                          borderRadius: "lg",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          "&:hover": {
-                            backgroundColor:
-                              selectedAsset?.id === asset.id
-                                ? "primary"
-                                : "surfaceContainerHighest",
-                          },
+                          width: "100%",
                         })}
                       >
                         <div
@@ -598,17 +643,7 @@ export function BridgeAssetsOutDialog({
                             gap: "0.75rem",
                           })}
                         >
-                          {iconPath && (
-                            <img
-                              src={iconPath || ""}
-                              alt={`${asset.metadata.symbol} icon`}
-                              className={css({
-                                width: "1.5rem",
-                                height: "1.5rem",
-                                objectFit: "contain",
-                              })}
-                            />
-                          )}
+                          <TokenIcon symbol={asset.metadata.symbol} size="md" />
                           <span className={css({ fontWeight: "500" })}>
                             {asset.metadata.symbol}
                           </span>
@@ -627,9 +662,27 @@ export function BridgeAssetsOutDialog({
                             asset.metadata.decimals,
                           ).toLocaleString()}
                         </span>
-                      </button>
-                    );
-                  })}
+                      </div>
+                      {needsFeePayment(asset.id) && (
+                        <div
+                          className={css({
+                            fontSize: "0.75rem",
+                            color:
+                              selectedAsset?.id === asset.id
+                                ? "onPrimary"
+                                : "warning",
+                            textAlign: "left",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                          })}
+                        >
+                          ⚠️ Requires at least 0.1 USDT/USDC for fees to bridge
+                          out
+                        </div>
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -736,6 +789,119 @@ export function BridgeAssetsOutDialog({
               </div>
             )}
 
+            {needsFeePaying && (
+              <div
+                className={css({
+                  marginTop: "1rem",
+                  padding: "1rem",
+                  backgroundColor: "surfaceContainer",
+                  borderRadius: "xl",
+                  border: "1px solid token(colors.surfaceContainerHighest)",
+                })}
+              >
+                <h4
+                  className={css({
+                    fontSize: "0.9rem",
+                    fontWeight: "500",
+                    color: "content.muted",
+                    marginBottom: "0.75rem",
+                  })}
+                >
+                  Select Fee Payment Asset
+                </h4>
+                <p
+                  className={css({
+                    fontSize: "0.85rem",
+                    color: "content.muted",
+                    marginBottom: "1rem",
+                  })}
+                >
+                  This asset requires a fee payment token to bridge. Please
+                  select one:
+                </p>
+                <div
+                  className={css({
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.75rem",
+                  })}
+                >
+                  {getAvailableFeeAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      onClick={() => setSelectedFeeAsset(asset)}
+                      className={css({
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "0.75rem 1rem",
+                        backgroundColor:
+                          selectedFeeAsset?.id === asset.id
+                            ? "primary"
+                            : "surfaceContainerHigh",
+                        color:
+                          selectedFeeAsset?.id === asset.id
+                            ? "onPrimary"
+                            : "content",
+                        border: "none",
+                        borderRadius: "lg",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        "&:hover": {
+                          backgroundColor:
+                            selectedFeeAsset?.id === asset.id
+                              ? "primary"
+                              : "surfaceContainerHighest",
+                        },
+                      })}
+                    >
+                      <div
+                        className={css({
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                        })}
+                      >
+                        <TokenIcon symbol={asset.metadata.symbol} size="md" />
+                        <span className={css({ fontWeight: "500" })}>
+                          {asset.metadata.symbol}
+                        </span>
+                      </div>
+                      <span
+                        className={css({
+                          fontSize: "0.875rem",
+                          color:
+                            selectedFeeAsset?.id === asset.id
+                              ? "onPrimary"
+                              : "content.muted",
+                        })}
+                      >
+                        {new DenominatedNumber(
+                          asset.value.free,
+                          asset.metadata.decimals,
+                        ).toLocaleString()}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {getAvailableFeeAssets.length === 0 && (
+                  <p
+                    className={css({
+                      textAlign: "center",
+                      color: "error",
+                      padding: "1rem",
+                      backgroundColor: "surfaceContainer",
+                      borderRadius: "md",
+                      fontSize: "0.875rem",
+                    })}
+                  >
+                    No fee payment assets available. You need either 0.1 USDC or
+                    USDT to bridge this asset.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div
               className={css({
                 fontSize: "0.85rem",
@@ -745,7 +911,7 @@ export function BridgeAssetsOutDialog({
                 gap: "0.5rem",
               })}
             >
-              <p>Available balance: {getFormattedBalance()}</p>
+              <p>Available balance: {formattedBalance}</p>
               {!isRemainderBelowED && (
                 <button
                   type="button"
@@ -766,6 +932,24 @@ export function BridgeAssetsOutDialog({
                 >
                   Use max amount
                 </button>
+              )}
+              {selectedAsset && needsFeePayment(selectedAsset.id) && (
+                <div
+                  className={css({
+                    fontSize: "0.85rem",
+                    color: "warning",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    marginTop: "0.5rem",
+                    backgroundColor: "warningContainer",
+                    padding: "0.75rem",
+                    borderRadius: "md",
+                  })}
+                >
+                  ⚠️ This asset requires USDT/USDC for bridging fees. Make sure
+                  you have enough fee tokens available.
+                </div>
               )}
             </div>
             <div
@@ -897,18 +1081,12 @@ export function BridgeAssetsOutDialog({
                     gap: "0.5rem",
                   })}
                 >
-                  {selectedAsset &&
-                    getTokenIcon(selectedAsset.metadata.symbol) && (
-                      <img
-                        src={getTokenIcon(selectedAsset.metadata.symbol) || ""}
-                        alt={`${selectedAsset.metadata.symbol} icon`}
-                        className={css({
-                          width: "1.25rem",
-                          height: "1.25rem",
-                          objectFit: "contain",
-                        })}
-                      />
-                    )}
+                  {selectedAsset && (
+                    <TokenIcon
+                      symbol={selectedAsset.metadata.symbol}
+                      size="md"
+                    />
+                  )}
                   <span className={css({ fontWeight: "500" })}>
                     {selectedAsset?.metadata.symbol}
                   </span>
@@ -935,8 +1113,8 @@ export function BridgeAssetsOutDialog({
                 <span>From:</span>
                 <span>
                   DAO Account:{" "}
-                  {coreStorage?.account
-                    ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}`
+                  {daoAddress
+                    ? `${daoAddress.substring(0, 6)}...${daoAddress.substring(daoAddress.length - 6)}`
                     : "Loading..."}
                 </span>
               </div>
@@ -954,6 +1132,25 @@ export function BridgeAssetsOutDialog({
                     : "Loading..."}
                 </span>
               </div>
+
+              {needsFeePaying && selectedFeeAsset && (
+                <div
+                  className={css({
+                    display: "flex",
+                    justifyContent: "space-between",
+                  })}
+                >
+                  <span>Fee Payment Asset:</span>
+                  <span>
+                    {selectedFeeAsset.metadata.symbol} (estimated fee:{" "}
+                    {new DenominatedNumber(
+                      calculateFeeAmount(selectedFeeAsset.id),
+                      selectedFeeAsset.metadata.decimals,
+                    ).toLocaleString()}
+                    )
+                  </span>
+                </div>
+              )}
             </div>
             <p
               className={css({
@@ -1091,18 +1288,13 @@ export function BridgeAssetsOutDialog({
             gap: "0.75rem",
           })}
         >
-          {selectedAsset && getTokenIcon(selectedAsset.metadata.symbol) && (
-            <img
-              src={getTokenIcon(selectedAsset.metadata.symbol) || ""}
-              alt={`${selectedAsset.metadata.symbol} icon`}
-              className={css({
-                width: "1.5rem",
-                height: "1.5rem",
-                objectFit: "contain",
-              })}
-            />
+          {selectedAsset && (
+            <>
+              <TokenIcon symbol={selectedAsset.metadata.symbol} size="md" />
+              <span>Bridge Your Assets Out of DAO</span>
+            </>
           )}
-          <span>Bridge Your Assets Out of DAO</span>
+          {!selectedAsset && <span>Bridge Your Assets Out of DAO</span>}
         </div>
       }
       onClose={onClose}

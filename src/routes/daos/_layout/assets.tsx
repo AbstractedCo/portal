@@ -17,7 +17,7 @@ import { useAtomValue } from "jotai";
 import { SendIcon, PlusCircleIcon, ArrowLeftRight } from "lucide-react";
 import { Binary } from "polkadot-api";
 import { QRCodeSVG } from "qrcode.react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 export const Route = createFileRoute("/daos/_layout/assets")({
   component: AssetsPage,
@@ -312,7 +312,7 @@ function AssetsPage() {
 
           {bridgeInDialogOpen && (
             <BridgeAssetsInDialog
-              daoId={daoId!}
+              daoAddress={coreStorage!.account}
               onClose={() => setBridgeInDialogOpen(false)}
             />
           )}
@@ -320,6 +320,7 @@ function AssetsPage() {
           {bridgeOutDialogOpen && (
             <BridgeAssetsOutDialog
               daoId={daoId!}
+              daoAddress={coreStorage!.account}
               onClose={() => setBridgeOutDialogOpen(false)}
             />
           )}
@@ -640,7 +641,7 @@ function TransferDialog({
   const VARCH_BUFFER = VARCH_EXISTENTIAL_DEPOSIT * 2n; // 2x existential deposit for better safety margin
 
   // Get the free balance based on token type
-  const getFreeBalance = () => {
+  const getFreeBalance = useCallback(() => {
     if (!daoTokenBalance) return 0n;
 
     // For native token (VARCH)
@@ -650,30 +651,25 @@ function TransferDialog({
 
     // For other tokens
     return (daoTokenBalance as TokenAccount).free;
-  };
+  }, [daoTokenBalance, tokenId]);
 
-  // Calculate max amount considering existential deposit only for VARCH
-  const maxAmount = useMemo(() => {
-    const freeBalance = getFreeBalance();
-
+  // Get the maximum amount that can be transferred
+  const getMaxAmount = (freeBalance: bigint, decimals: number) => {
     // For VARCH, consider existential deposit and buffer
     if (tokenId === 0) {
       const minimumRequired = VARCH_EXISTENTIAL_DEPOSIT + VARCH_BUFFER;
       if (freeBalance <= minimumRequired) return "0";
       const safeMaximum = freeBalance - minimumRequired;
-      // Return the raw number string without formatting
-      return (Number(safeMaximum) / Math.pow(10, decimals)).toString();
+      return new DenominatedNumber(safeMaximum, decimals).toString();
     }
-
-    // For other tokens, use full free balance without formatting
-    return (Number(freeBalance) / Math.pow(10, decimals)).toString();
-  }, [daoTokenBalance, tokenId, decimals]);
+    // For other tokens, use full free balance
+    return new DenominatedNumber(freeBalance, decimals).toString();
+  };
 
   // Format balance for display separately
-  const formattedBalance = useMemo(() => {
-    const freeBalance = getFreeBalance();
+  const getFormattedBalance = (freeBalance: bigint, decimals: number) => {
     return new DenominatedNumber(freeBalance, decimals).toLocaleString();
-  }, [daoTokenBalance, decimals]);
+  };
 
   // Check for existential deposit issues only for VARCH
   useEffect(() => {
@@ -690,7 +686,16 @@ function TransferDialog({
         setIsRemainderBelowED(false);
       }
     }
-  }, [amount, daoTokenBalance, tokenId, decimals, setIsRemainderBelowED]);
+  }, [
+    amount,
+    daoTokenBalance,
+    tokenId,
+    decimals,
+    setIsRemainderBelowED,
+    getFreeBalance,
+    VARCH_EXISTENTIAL_DEPOSIT,
+    VARCH_BUFFER,
+  ]);
 
   // Handle form submission with existential deposit check for VARCH
   const handleSubmit = async (event: React.FormEvent) => {
@@ -860,11 +865,14 @@ function TransferDialog({
             })}
           >
             <span>
-              Available balance: {formattedBalance} {symbol}
+              Available balance:{" "}
+              {getFormattedBalance(getFreeBalance(), decimals)} {symbol}
             </span>
             <button
               type="button"
-              onClick={() => setAmount(maxAmount)}
+              onClick={() =>
+                setAmount(getMaxAmount(getFreeBalance(), decimals))
+              }
               className={css({
                 background: "none",
                 border: "none",
@@ -904,7 +912,9 @@ function TransferDialog({
               </p>
               <button
                 type="button"
-                onClick={() => setAmount(maxAmount)}
+                onClick={() =>
+                  setAmount(getMaxAmount(getFreeBalance(), decimals))
+                }
                 className={css({
                   background: "none",
                   border: "none",
@@ -1085,7 +1095,7 @@ function TransferDialog({
               <Button
                 onClick={() => {
                   setShowEDConfirmation(false);
-                  setAmount(maxAmount);
+                  setAmount(getMaxAmount(getFreeBalance(), decimals));
                 }}
                 className={css({
                   backgroundColor: "primary",

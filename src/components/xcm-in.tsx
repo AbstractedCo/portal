@@ -7,11 +7,13 @@ import {
   type BridgeStatusChange,
   isBridgeSupportedIn,
   isNativeToken,
+  needsFeePayment,
 } from "../features/xcm/bridge-utils";
 import { getAssetHubId } from "../features/xcm/xcm-utils";
 import { Button } from "./button";
 import { ModalDialog } from "./modal-dialog";
 import { TextInput } from "./text-input";
+import { TokenIcon } from "./token-icon";
 import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
 import { MutationError, pending } from "@reactive-dot/core";
 import { useLazyLoadQuery } from "@reactive-dot/react";
@@ -19,33 +21,19 @@ import { useMutation, useMutationEffect } from "@reactive-dot/react";
 import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 
-// Helper function to get the appropriate icon for a token
-const getTokenIcon = (symbol: string) => {
-  const normalizedSymbol = symbol.toUpperCase();
-
-  switch (normalizedSymbol) {
-    case "DOT":
-      return "/polkadot-new-dot-logo.svg";
-    case "USDT":
-      return "/tether-usdt-logo.svg";
-    case "USDC":
-      return "/usd-coin-usdc-logo.svg";
-    case "VARCH":
-      return "/invarch-logo.svg";
-    default:
-      return null;
-  }
-};
+// Add constants for VARCH token
+const VARCH_EXISTENTIAL_DEPOSIT = 10_000_000_000n;
+const VARCH_BUFFER = VARCH_EXISTENTIAL_DEPOSIT * 2n;
 
 interface BridgeAssetsInDialogProps {
-  daoId: number;
+  daoAddress: string;
   onClose: () => void;
 }
 
 export function BridgeAssetsInDialog({
-  daoId,
+  daoAddress,
   onClose,
 }: BridgeAssetsInDialogProps) {
   const [selectedAsset, setSelectedAsset] = useState<{
@@ -71,16 +59,9 @@ export function BridgeAssetsInDialog({
   const registeredAssets = useLazyLoadRegisteredAssets();
   const selectedAccount = useAtomValue(selectedAccountAtom);
 
-  // Get the DAO's core storage to access its account
-  const coreStorage = useLazyLoadQuery((builder) =>
-    builder.readStorage("INV4", "CoreStorage", [daoId]),
-  );
-
   // Query user's native VARCH balance
   const nativeBalance = useLazyLoadQuery((builder) =>
-    selectedAccount?.address
-      ? builder.readStorage("System", "Account", [selectedAccount.address])
-      : null,
+    daoAddress ? builder.readStorage("System", "Account", [daoAddress]) : null,
   );
 
   // Get the asset ID for the selected asset
@@ -218,7 +199,7 @@ export function BridgeAssetsInDialog({
   // Set up the transfer mutation for native VARCH
   const [_nativeTransferState, executeNativeTransfer] = useMutation(
     (builder) => {
-      if (!coreStorage?.account || !amount || !selectedAccount?.address) {
+      if (!daoAddress || !amount || !selectedAccount?.address) {
         throw new Error("Missing required parameters for transfer");
       }
 
@@ -231,7 +212,7 @@ export function BridgeAssetsInDialog({
       return builder.Balances.transfer_keep_alive({
         dest: {
           type: "Id",
-          value: coreStorage.account,
+          value: daoAddress,
         },
         value: rawAmount,
       });
@@ -286,7 +267,7 @@ export function BridgeAssetsInDialog({
   const getBridgeParams = () => {
     const assetId = getAssetId();
     const rawAmount = getRawAmount();
-    const beneficiaryAccount = coreStorage?.account;
+    const beneficiaryAccount = daoAddress;
 
     // Add debugging information
     console.log("Asset ID:", assetId);
@@ -341,7 +322,7 @@ export function BridgeAssetsInDialog({
 
   // Handle bridge operation
   const handleBridgeIn = async () => {
-    if (!selectedAsset || !coreStorage || !amount || !selectedAccount) {
+    if (!selectedAsset || !daoAddress || !amount || !selectedAccount) {
       showNotification({
         variant: "error",
         message:
@@ -541,6 +522,68 @@ export function BridgeAssetsInDialog({
     }
   };
 
+  // Get the free balance based on token type
+  const getFreeBalance = useCallback(() => {
+    if (!selectedAsset?.isNativeVarch) {
+      if (!assetHubBalance) return 0n;
+      if (typeof assetHubBalance === "object" && "balance" in assetHubBalance) {
+        return assetHubBalance.balance ?? 0n;
+      }
+      if (typeof assetHubBalance === "object" && "data" in assetHubBalance) {
+        return assetHubBalance.data?.free || 0n;
+      }
+    } else {
+      if (!nativeBalance || typeof nativeBalance !== "object") return 0n;
+      if ("data" in nativeBalance) {
+        return nativeBalance.data.free;
+      }
+    }
+    return 0n;
+  }, [selectedAsset, assetHubBalance, nativeBalance]);
+
+  // Calculate max amount considering existential deposit
+  const maxAmount = useMemo(() => {
+    const freeBalance = getFreeBalance();
+
+    // For VARCH, consider existential deposit and buffer
+    if (selectedAsset?.isNativeVarch) {
+      const minimumRequired = VARCH_EXISTENTIAL_DEPOSIT + VARCH_BUFFER;
+      if (freeBalance <= minimumRequired) return "0";
+      const safeMaximum = freeBalance - minimumRequired;
+      return new DenominatedNumber(
+        safeMaximum,
+        selectedAsset.metadata.decimals,
+      ).toString();
+    }
+
+    // For other assets, use full free balance
+    if (selectedAsset) {
+      return new DenominatedNumber(
+        freeBalance,
+        selectedAsset.metadata.decimals,
+      ).toString();
+    }
+
+    return "0";
+  }, [selectedAsset, getFreeBalance]);
+
+  // Handle amount changes with validation
+  const handleAmountChange = useCallback(
+    (value: string) => {
+      if (value === maxAmount) {
+        setAmount(value);
+      } else {
+        const regex = new RegExp(
+          `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
+        );
+        if (value === "" || regex.test(value)) {
+          setAmount(value);
+        }
+      }
+    },
+    [maxAmount, selectedAsset?.metadata.decimals, setAmount],
+  );
+
   // Render appropriate content based on the current step
   const renderStepContent = () => {
     // Get the supported assets
@@ -687,7 +730,11 @@ export function BridgeAssetsInDialog({
                     })}
                   >
                     {filteredAssets.map((asset) => {
-                      const iconPath = getTokenIcon(asset.metadata.symbol);
+                      // Only check needsFeePayment for non-native tokens from Asset Hub
+                      const requiresFeePayment =
+                        asset.metadata.location &&
+                        !isNativeToken(asset.metadata.location) &&
+                        needsFeePayment(asset.id);
 
                       return (
                         <button
@@ -695,8 +742,8 @@ export function BridgeAssetsInDialog({
                           onClick={() => setSelectedAsset(asset)}
                           className={css({
                             display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
+                            flexDirection: "column",
+                            gap: "0.5rem",
                             padding: "0.75rem 1rem",
                             backgroundColor:
                               selectedAsset?.id === asset.id
@@ -721,36 +768,56 @@ export function BridgeAssetsInDialog({
                           <div
                             className={css({
                               display: "flex",
+                              justifyContent: "space-between",
                               alignItems: "center",
-                              gap: "0.75rem",
+                              width: "100%",
                             })}
                           >
-                            {iconPath && (
-                              <img
-                                src={iconPath}
-                                alt={`${asset.metadata.symbol} icon`}
-                                className={css({
-                                  width: "1.5rem",
-                                  height: "1.5rem",
-                                  objectFit: "contain",
-                                })}
+                            <div
+                              className={css({
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.75rem",
+                              })}
+                            >
+                              <TokenIcon
+                                symbol={asset.metadata.symbol}
+                                size="md"
                               />
-                            )}
-                            <span className={css({ fontWeight: "500" })}>
-                              {asset.metadata.symbol}
+                              <span className={css({ fontWeight: "500" })}>
+                                {asset.metadata.symbol}
+                              </span>
+                            </div>
+                            <span
+                              className={css({
+                                fontSize: "0.875rem",
+                                color:
+                                  selectedAsset?.id === asset.id
+                                    ? "onPrimary"
+                                    : "content.muted",
+                              })}
+                            >
+                              {asset.metadata.name}
                             </span>
                           </div>
-                          <span
-                            className={css({
-                              fontSize: "0.875rem",
-                              color:
-                                selectedAsset?.id === asset.id
-                                  ? "onPrimary"
-                                  : "content.muted",
-                            })}
-                          >
-                            {asset.metadata.name}
-                          </span>
+                          {requiresFeePayment && (
+                            <div
+                              className={css({
+                                fontSize: "0.75rem",
+                                color:
+                                  selectedAsset?.id === asset.id
+                                    ? "onPrimary"
+                                    : "warning",
+                                textAlign: "left",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.25rem",
+                              })}
+                            >
+                              ⚠️ Requires at least 0.1 USDT/USDC for fees to
+                              bridge out
+                            </div>
+                          )}
                         </button>
                       );
                     })}
@@ -795,22 +862,7 @@ export function BridgeAssetsInDialog({
             >
               {selectedAsset && (
                 <>
-                  {(selectedAsset.isNativeVarch ||
-                    getTokenIcon(selectedAsset.metadata.symbol)) && (
-                    <img
-                      src={
-                        selectedAsset.isNativeVarch
-                          ? "/invarch-logo.svg"
-                          : getTokenIcon(selectedAsset.metadata.symbol) || ""
-                      }
-                      alt={`${selectedAsset.metadata.symbol} icon`}
-                      className={css({
-                        width: "1.5rem",
-                        height: "1.5rem",
-                        objectFit: "contain",
-                      })}
-                    />
-                  )}
+                  <TokenIcon symbol={selectedAsset.metadata.symbol} size="md" />
                   <p>
                     Enter the amount of {selectedAsset.metadata.symbol} to
                     bridge to the DAO
@@ -829,15 +881,7 @@ export function BridgeAssetsInDialog({
               <TextInput
                 label={`Amount (${selectedAsset?.metadata.symbol})`}
                 value={amount}
-                onChangeValue={(value) => {
-                  // Allow decimal points and numbers
-                  const regex = new RegExp(
-                    `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
-                  );
-                  if (value === "" || regex.test(value)) {
-                    setAmount(value);
-                  }
-                }}
+                onChangeValue={handleAmountChange}
                 placeholder={`Enter amount in ${selectedAsset?.metadata.symbol}`}
                 className={css({ width: "100%" })}
               />
@@ -871,27 +915,21 @@ export function BridgeAssetsInDialog({
                 className={css({
                   display: "flex",
                   flexDirection: "column",
-                  gap: "0.5rem",
+                  gap: "0.25rem",
                 })}
               >
-                <div
+                <p
                   className={css({
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.25rem",
+                    color: "content.muted",
+                    fontSize: "0.875rem",
                   })}
                 >
-                  <p
-                    className={css({
-                      color: "content.muted",
-                      fontSize: "0.875rem",
-                    })}
-                  >
-                    Available balance:{" "}
-                    {selectedAsset ? getFormattedBalance() : "Select an asset"}{" "}
-                    on {selectedAsset?.isNativeVarch ? "InvArch" : "Asset Hub"}
-                  </p>
-                  {selectedAsset && (
+                  Available balance:{" "}
+                  {selectedAsset ? getFormattedBalance() : "Select an asset"} on{" "}
+                  {selectedAsset?.isNativeVarch ? "InvArch" : "Asset Hub"}
+                </p>
+                {selectedAsset && (
+                  <>
                     <p
                       className={css({
                         fontSize: "0.85rem",
@@ -902,8 +940,28 @@ export function BridgeAssetsInDialog({
                         ? "Make sure you have enough funds in your account to cover the transaction fees."
                         : "Make sure you have enough funds in your Asset Hub account to cover the transaction fees."}
                     </p>
-                  )}
-                </div>
+                    {selectedAsset.metadata.location &&
+                      !isNativeToken(selectedAsset.metadata.location) &&
+                      needsFeePayment(selectedAsset.id) && (
+                        <div
+                          className={css({
+                            fontSize: "0.85rem",
+                            color: "warning",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            marginTop: "0.5rem",
+                            backgroundColor: "warningContainer",
+                            padding: "0.75rem",
+                            borderRadius: "md",
+                          })}
+                        >
+                          ⚠️ This asset will require 0.1 USDT/USDC for fees when
+                          bridging out later
+                        </div>
+                      )}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -978,8 +1036,8 @@ export function BridgeAssetsInDialog({
                 <span>To:</span>
                 <span>
                   DAO Account:{" "}
-                  {coreStorage?.account
-                    ? `${coreStorage.account.substring(0, 6)}...${coreStorage.account.substring(coreStorage.account.length - 6)}`
+                  {daoAddress
+                    ? `${daoAddress.toString().substring(0, 6)}...${daoAddress.toString().substring(daoAddress.toString().length - 6)}`
                     : "Loading..."}
                 </span>
               </div>

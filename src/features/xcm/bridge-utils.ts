@@ -1,4 +1,5 @@
-import { isAssetFromAssetHub } from "./xcm-utils";
+import { canPayFees, needsFeePayment, calculateFeeAmount } from "./fee-assets";
+import { CHAIN_CONFIG, isAssetFromAssetHub } from "./xcm-utils";
 import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
 import { MutationError, pending } from "@reactive-dot/core";
 import { useMutation, useMutationEffect } from "@reactive-dot/react";
@@ -29,6 +30,8 @@ export interface BridgeOutParams {
   amount?: bigint;
   onStatusChange?: (status: BridgeStatusChange) => void;
   onComplete?: () => void;
+  daoId?: number;
+  feeAssetId?: number | undefined;
 }
 
 export interface ValidationResult {
@@ -290,9 +293,12 @@ export function useAssetHubBridgeInOperation(params?: BridgeParams) {
   };
 }
 
+// Export fee-related functions from fee-assets.ts
+export { canPayFees, needsFeePayment, calculateFeeAmount };
+
 // Custom hook for bridging assets out from InvArch to Asset Hub
 export function useInvArchBridgeOutOperation(
-  params?: BridgeOutParams & { daoId?: number },
+  params?: BridgeOutParams & { daoId?: number; feeAssetId?: number },
 ) {
   const {
     destinationAccount,
@@ -301,6 +307,7 @@ export function useInvArchBridgeOutOperation(
     onStatusChange,
     onComplete,
     daoId,
+    feeAssetId,
   } = params || {};
 
   // Processing state
@@ -317,49 +324,56 @@ export function useInvArchBridgeOutOperation(
         throw new Error("Invalid asset ID type");
       }
 
-      // Create the xTokens.transfer call that will be executed by the DAO
-      const xTokensTransferCall = builder.XTokens.transfer({
-        // Currency ID for the token to transfer (ForeignAsset for Asset Hub assets)
-        currency_id: Number(assetId),
+      // Create the destination for Asset Hub using the helper function
+      const assetHubDest = createAssetHubDestination(destinationAccount);
 
-        // Amount to transfer
-        amount,
-
-        // Destination chain and account
-        dest: {
-          type: "V4",
-          value: {
-            parents: 1, // Parent (Relay chain)
-            interior: {
-              type: "X2",
-              value: [
-                {
-                  type: "Parachain",
-                  value: 1000, // Asset Hub parachain ID
-                },
-                {
-                  type: "AccountId32",
-                  value: {
-                    network: undefined,
-                    id: FixedSizeBinary.fromAccountId32(destinationAccount),
-                  },
-                },
-              ],
-            },
+      // If the asset can pay fees directly, use simple transfer
+      if (canPayFees(Number(assetId))) {
+        const transferCall = builder.XTokens.transfer({
+          currency_id: Number(assetId),
+          amount,
+          dest: assetHubDest,
+          dest_weight_limit: {
+            type: "Unlimited",
+            value: undefined,
           },
-        },
+        });
 
-        // Weight limit for the destination chain execution
+        return builder.INV4.operate_multisig({
+          dao_id: daoId,
+          call: transferCall.decodedCall,
+          fee_asset: { type: "Native", value: undefined },
+          metadata: undefined,
+        });
+      }
+
+      // For other assets, we need a fee paying asset
+      if (!feeAssetId || !canPayFees(feeAssetId)) {
+        throw new Error(
+          "A valid fee paying asset is required for this transfer",
+        );
+      }
+
+      // Calculate fee amount using the fee-assets module
+      const feeAmount = calculateFeeAmount(feeAssetId);
+
+      // Use transfer_multicurrencies for assets that need fee payment
+      const transferMultiCall = builder.XTokens.transfer_multicurrencies({
+        currencies: [
+          [feeAssetId, feeAmount],
+          [Number(assetId), amount],
+        ] as [number, bigint][],
+        fee_item: 0, // First currency is used for fees
+        dest: assetHubDest,
         dest_weight_limit: {
           type: "Unlimited",
           value: undefined,
         },
       });
 
-      // Execute the transfer through the DAO's multisig operation
       return builder.INV4.operate_multisig({
         dao_id: daoId,
-        call: xTokensTransferCall.decodedCall,
+        call: transferMultiCall.decodedCall,
         fee_asset: { type: "Native", value: undefined },
         metadata: undefined,
       });
@@ -541,4 +555,30 @@ export function validateBridgeAmount(
   }
 
   return { isValid: true };
+}
+
+// Helper function to create Asset Hub destination
+function createAssetHubDestination(account: SS58String): XcmVersionedLocation {
+  return {
+    type: "V4",
+    value: {
+      parents: 1,
+      interior: {
+        type: "X2",
+        value: [
+          {
+            type: "Parachain",
+            value: CHAIN_CONFIG.ASSET_HUB.paraId,
+          },
+          {
+            type: "AccountId32",
+            value: {
+              network: undefined,
+              id: FixedSizeBinary.fromAccountId32(account),
+            },
+          },
+        ],
+      },
+    },
+  } as XcmVersionedLocation;
 }

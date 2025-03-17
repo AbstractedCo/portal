@@ -11,6 +11,7 @@ type NotificationType = {
 
 type NotificationContextType = {
   showNotification: (notification: Omit<NotificationType, "id">) => void;
+  removeNotification: (id: string) => void;
 };
 
 const NotificationContext = createContext<NotificationContextType | undefined>(
@@ -21,19 +22,26 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
 
   const showNotification = (newNotification: Omit<NotificationType, "id">) => {
-    const id = Date.now().toString();
+    const now = Date.now();
+
+    // Check for exact duplicate content
+    const hasDuplicate = notifications.some(
+      (n) =>
+        n.message === newNotification.message &&
+        n.variant === newNotification.variant,
+    );
+    if (hasDuplicate) {
+      return;
+    }
+
+    const id = now.toString();
 
     setNotifications((currentNotifications) => {
-      // Check if a notification with the same message already exists
-      const isDuplicate = currentNotifications.some(
-        (notification) => notification.message === newNotification.message,
+      // Remove any existing notifications with the same variant
+      const filteredNotifications = currentNotifications.filter(
+        (n) => n.variant !== newNotification.variant,
       );
-
-      if (isDuplicate) {
-        return currentNotifications; // Don't add duplicate notifications
-      }
-
-      return [{ ...newNotification, id }, ...currentNotifications];
+      return [{ ...newNotification, id }, ...filteredNotifications];
     });
   };
 
@@ -44,7 +52,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <NotificationContext.Provider value={{ showNotification }}>
+    <NotificationContext.Provider
+      value={{ showNotification, removeNotification }}
+    >
       {children}
       <div
         className={css({
@@ -68,6 +78,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               position: "relative",
               top: 0,
               right: 0,
+              pointerEvents: "auto",
             }}
           />
         ))}

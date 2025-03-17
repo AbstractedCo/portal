@@ -18,6 +18,8 @@ const getTokenIcon = (symbol: string) => {
       return "/usd-coin-usdc-logo.svg";
     case "VARCH":
       return "/invarch-logo.svg";
+    case "WUD":
+      return "/wud-logo.png";
     default:
       return null;
   }

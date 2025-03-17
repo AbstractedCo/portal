@@ -70,10 +70,17 @@ export function NotificationPopup({
       <button
         onClick={handleCopy}
         className={css({
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           padding: "0.25rem",
           cursor: "pointer",
+          background: "none",
+          border: "none",
+          color: "inherit",
+          borderRadius: "0.25rem",
           "&:hover": {
-            opacity: 0.8,
+            backgroundColor: "rgba(0, 0, 0, 0.1)",
           },
         })}
         title="Copy to clipboard"
@@ -84,10 +91,17 @@ export function NotificationPopup({
       <button
         onClick={onClose}
         className={css({
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           padding: "0.25rem",
           cursor: "pointer",
+          background: "none",
+          border: "none",
+          color: "inherit",
+          borderRadius: "0.25rem",
           "&:hover": {
-            opacity: 0.8,
+            backgroundColor: "rgba(0, 0, 0, 0.1)",
           },
         })}
         title="Close notification"
