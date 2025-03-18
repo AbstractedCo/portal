@@ -2,6 +2,7 @@ import {
   polkadot_people,
   invarch,
   polkadot_asset_hub,
+  polkadot,
 } from "@polkadot-api/descriptors";
 import { defineConfig } from "@reactive-dot/core";
 import { InjectedWalletProvider } from "@reactive-dot/core/wallets.js";
@@ -25,6 +26,11 @@ export const config = defineConfig({
     polkadot_people: {
       descriptor: polkadot_people,
       provider: getWsProvider("wss://polkadot-people-rpc.polkadot.io"),
+    },
+    polkadot: {
+      descriptor: polkadot,
+      provider: getWsProvider("wss://rpc.polkadot.io"),
+      // provider: getWsProvider("ws://localhost:8002"),
     },
   },
   targetChains: ["invarch"],

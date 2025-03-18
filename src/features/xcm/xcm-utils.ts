@@ -197,6 +197,72 @@ export async function createAssetHubToInvArchTransfer(params: {
   }
 }
 
+// Create XCM transfer parameters for Polkadot to InvArch transfer
+export async function createPolkadotToInvArchTransfer(params: {
+  beneficiaryAccount: string;
+  assetId: number;
+  amount: bigint;
+}) {
+  try {
+    const { beneficiaryAccount, amount } = params;
+
+    if (!beneficiaryAccount || amount === undefined) {
+      console.warn("Missing required parameters:", {
+        beneficiaryAccount,
+        location,
+        amount,
+      });
+      throw new Error("Missing required parameters for transfer");
+    }
+
+    // Construct the XCM message
+    return {
+      V4: {
+        dest: {
+          parents: 0,
+          interior: {
+            X1: {
+              Parachain: CHAIN_CONFIG.INVARCH.paraId,
+            },
+          },
+        },
+        beneficiary: {
+          parents: 0,
+          interior: {
+            X1: {
+              AccountId32: {
+                network: undefined,
+                id: beneficiaryAccount,
+              },
+            },
+          },
+        },
+        assets: [
+          {
+            id: {
+              Concrete: {
+                parents: 0,
+                interior: {
+                  type: "Here",
+                  value: undefined,
+                },
+              },
+            },
+            fun: {
+              Fungible: amount,
+            },
+          },
+        ],
+        fee_asset_item: 0,
+        weight_limit: "Unlimited",
+      },
+    };
+  } catch (error) {
+    console.warn("Error creating transfer parameters:", error);
+    throw error;
+  }
+}
+
 // Validate if an asset is from Asset Hub based on its location
 export function isAssetFromAssetHub(
   location: XcmVersionedLocation | undefined,

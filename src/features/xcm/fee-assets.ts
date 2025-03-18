@@ -88,3 +88,37 @@ export function getAvailableFeeAssets(
     return balance >= asset.minFeeAmount;
   });
 }
+
+// Calculate the maximum safe amount that can be transferred while maintaining existential deposit
+export function calculateSafeMaxAmount(params: {
+  balance: bigint;
+  existentialDeposit: bigint;
+  decimals: number;
+}): {
+  maxAmount: bigint;
+  formattedAmount: string;
+  isBelowED: boolean;
+} {
+  const { balance, existentialDeposit, decimals } = params;
+
+  // If balance is less than or equal to existential deposit, no transfer possible
+  if (balance <= existentialDeposit) {
+    return {
+      maxAmount: 0n,
+      formattedAmount: "0",
+      isBelowED: true,
+    };
+  }
+
+  // Calculate max transferable amount
+  const maxAmount = balance - existentialDeposit;
+
+  // Format the amount for display
+  const formattedAmount = new DenominatedNumber(maxAmount, decimals).toString();
+
+  return {
+    maxAmount,
+    formattedAmount,
+    isBelowED: maxAmount === 0n,
+  };
+}

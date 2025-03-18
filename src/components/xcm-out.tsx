@@ -3,6 +3,8 @@ import { useNotification } from "../contexts/notification-context";
 import { selectedAccountAtom } from "../features/accounts/store";
 import {
   useInvArchBridgeOutOperation,
+  useAssetHubBridgeOutOperation,
+  usePolkadotBridgeOutOperation,
   type BridgeStatusChange,
   isBridgeSupportedOut,
   canPayFees,
@@ -50,7 +52,7 @@ interface TokenBalance {
   };
 }
 
-interface Asset {
+type Asset = {
   id: number;
   value: {
     free: bigint;
@@ -62,23 +64,16 @@ interface Asset {
     decimals: number;
     name: string;
     existential_deposit: bigint;
+    source?: string;
   };
-}
+};
 
 export function BridgeAssetsOutDialog({
   daoId,
   daoAddress,
   onClose,
 }: BridgeAssetsOutDialogProps) {
-  const [selectedAsset, setSelectedAsset] = useState<{
-    id: number;
-    metadata: {
-      symbol: string;
-      decimals: number;
-      name: string;
-      existential_deposit: bigint;
-    };
-  } | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
   // Add state for fee asset selection
   const [selectedFeeAsset, setSelectedFeeAsset] = useState<{
@@ -146,7 +141,7 @@ export function BridgeAssetsOutDialog({
     [assetMetadataResult],
   );
 
-  // Combine tokens with their metadata
+  // Modify the getAvailableAssets function to use proper typing
   const getAvailableAssets = useCallback((): Asset[] => {
     if (!daoTokens || !assetMetadata) return [];
 
@@ -183,16 +178,33 @@ export function BridgeAssetsOutDialog({
           continue;
         }
 
-        assets.push({
-          id: token.keyArgs[1],
-          value: token.value,
-          metadata: {
-            symbol: metadata.symbol.asText(),
-            decimals: metadata.decimals,
-            name: metadata.name.asText(),
-            existential_deposit: metadata.existential_deposit,
-          },
-        });
+        // For DOT (assetId === 3), create two entries
+        if (token.keyArgs[1] === 3 && metadata.symbol.asText() === "DOT") {
+          // DOT to Polkadot only
+          assets.push({
+            id: token.keyArgs[1],
+            value: token.value,
+            metadata: {
+              symbol: metadata.symbol.asText(),
+              decimals: metadata.decimals,
+              name: "DOT (to Polkadot)",
+              existential_deposit: metadata.existential_deposit,
+              source: "polkadot",
+            },
+          });
+        } else {
+          // For other assets
+          assets.push({
+            id: token.keyArgs[1],
+            value: token.value,
+            metadata: {
+              symbol: metadata.symbol.asText(),
+              decimals: metadata.decimals,
+              name: metadata.name.asText(),
+              existential_deposit: metadata.existential_deposit,
+            },
+          });
+        }
       } catch (error) {
         console.warn("Error processing token:", daoTokens[i], error);
         continue;
@@ -322,7 +334,7 @@ export function BridgeAssetsOutDialog({
       message: status.message,
     });
 
-    // Close dialog on successful completion
+    // Close dialog only on successful finalization
     if (status.status === "success" && status.message.includes("successful")) {
       onClose();
     }
@@ -355,61 +367,93 @@ export function BridgeAssetsOutDialog({
               variant: "success",
               message: `Bridge out of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
             });
-            onClose();
           },
         }
       : undefined,
   );
 
-  // Handle bridge operation
-  const handleBridgeOut = async () => {
-    if (!selectedAsset || !destinationAccount || !amount) {
-      showNotification({
-        variant: "error",
-        message:
-          "Please select an asset, enter an amount, and provide a destination account.",
-      });
-      return;
-    }
+  // Set up the Asset Hub bridge
+  const assetHubBridge = useAssetHubBridgeOutOperation({
+    daoId: daoId.toString(),
+    selectedAsset: selectedAsset as Asset,
+    amount: getRawAmount() || BigInt(0),
+    destinationAccount: destinationAccount as SS58String,
+    onStatusChange: handleBridgeStatusChange,
+  });
 
-    // Validate amount format
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      showNotification({
-        variant: "error",
-        message: "Please enter a valid amount greater than zero.",
-      });
-      return;
-    }
+  // Set up the Polkadot bridge
+  const polkadotBridge = usePolkadotBridgeOutOperation({
+    daoId: daoId.toString(),
+    selectedAsset: selectedAsset as Asset,
+    amount: getRawAmount() || BigInt(0),
+    destinationAccount: destinationAccount as SS58String,
+    onStatusChange: handleBridgeStatusChange,
+  });
 
-    // Get raw amount and validate it
-    const rawAmount = getRawAmount();
-    if (rawAmount === undefined) {
-      showNotification({
-        variant: "error",
-        message:
-          "Could not convert amount to the correct format. Please check your input.",
-      });
-      return;
-    }
+  // Add validateAmount function
+  const validateAmount = (value: string): boolean => {
+    if (!selectedAsset) return false;
 
     try {
-      console.log("Starting bridge out execution with params:", {
-        destinationAccount,
-        assetId: selectedAsset?.id,
-        amount: rawAmount,
-        daoId,
-        feeAssetId: selectedFeeAsset?.id,
-      });
-      // Execute the bridge operation
-      await invArchBridge.executeBridgeOut();
+      const parsedAmount = parseFloat(value);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) return false;
+
+      const rawAmount = getRawAmount();
+      if (!rawAmount) return false;
+
+      // Check if the amount is greater than the available balance
+      if (rawAmount > selectedAsset.value.free) return false;
+
+      return true;
     } catch (error) {
-      console.error("Failed to submit bridge out transaction:", error);
+      console.error("Error validating amount:", error);
+      return false;
+    }
+  };
+
+  // Handle bridge operation
+  const handleBridgeOut = async () => {
+    try {
+      if (!selectedAsset || !amount || !selectedAccount?.address) {
+        showNotification({
+          variant: "error",
+          message: "Please fill in all required fields",
+        });
+        return;
+      }
+
+      // Validate amount before proceeding
+      if (!validateAmount(amount)) {
+        showNotification({
+          variant: "error",
+          message: "Invalid amount or insufficient balance",
+        });
+        return;
+      }
+
+      setIsProcessing(true);
+
+      // For DOT, use Polkadot bridge
+      if (selectedAsset.id === 3 && selectedAsset.metadata.symbol === "DOT") {
+        // Use Polkadot bridge for transfers to Polkadot
+        await polkadotBridge.executeBridge();
+      } else {
+        // For other assets, use Asset Hub bridge
+        await assetHubBridge.executeBridge();
+      }
+
+      // Show success notification
+      showNotification({
+        variant: "success",
+        message: `Bridge of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
+      });
+    } catch (err) {
+      console.error("Bridge transaction failed:", err);
       showNotification({
         variant: "error",
         message:
-          "Failed to submit bridge out transaction: " +
-          (error instanceof Error ? error.message : "Unknown error"),
+          "Failed to submit transaction: " +
+          (err instanceof Error ? err.message : "Unknown error"),
       });
       setIsProcessing(false);
     }
@@ -581,109 +625,232 @@ export function BridgeAssetsOutDialog({
               })}
             >
               <div>
-                <h4
-                  className={css({
-                    fontSize: "0.9rem",
-                    fontWeight: "500",
-                    color: "content.muted",
-                    marginBottom: "0.75rem",
-                    paddingLeft: "0.5rem",
-                  })}
-                >
-                  Available Assets
-                </h4>
-                <div
-                  className={css({
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.75rem",
-                  })}
-                >
-                  {availableAssets.map((asset) => (
-                    <button
-                      key={asset.id}
-                      onClick={() => setSelectedAsset(asset)}
+                {/* Polkadot tokens section */}
+                {availableAssets.some(
+                  (asset) => asset.metadata.source === "polkadot",
+                ) && (
+                  <div className={css({ marginBottom: "1.5rem" })}>
+                    <h4
+                      className={css({
+                        fontSize: "0.9rem",
+                        fontWeight: "500",
+                        color: "content.muted",
+                        marginBottom: "0.75rem",
+                        paddingLeft: "0.5rem",
+                      })}
+                    >
+                      Polkadot Tokens
+                    </h4>
+                    <div
                       className={css({
                         display: "flex",
                         flexDirection: "column",
-                        gap: "0.5rem",
-                        padding: "0.75rem 1rem",
-                        backgroundColor:
-                          selectedAsset?.id === asset.id
-                            ? "primary"
-                            : "surfaceContainerHigh",
-                        color:
-                          selectedAsset?.id === asset.id
-                            ? "onPrimary"
-                            : "content",
-                        border: "none",
-                        borderRadius: "lg",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        "&:hover": {
-                          backgroundColor:
-                            selectedAsset?.id === asset.id
-                              ? "primary"
-                              : "surfaceContainerHighest",
-                        },
+                        gap: "0.75rem",
                       })}
                     >
-                      <div
-                        className={css({
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          width: "100%",
+                      {availableAssets
+                        .filter((asset) => asset.metadata.source === "polkadot")
+                        .map((asset) => (
+                          <button
+                            key={`${asset.id}-${asset.metadata.source}`}
+                            onClick={() => setSelectedAsset(asset)}
+                            className={css({
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.5rem",
+                              padding: "0.75rem 1rem",
+                              backgroundColor:
+                                selectedAsset?.id === asset.id &&
+                                selectedAsset?.metadata.source === "polkadot"
+                                  ? "primary"
+                                  : "surfaceContainerHigh",
+                              color:
+                                selectedAsset?.id === asset.id &&
+                                selectedAsset?.metadata.source === "polkadot"
+                                  ? "onPrimary"
+                                  : "content",
+                              border: "none",
+                              borderRadius: "lg",
+                              cursor: "pointer",
+                              transition: "all 0.2s ease",
+                              "&:hover": {
+                                backgroundColor:
+                                  selectedAsset?.id === asset.id &&
+                                  selectedAsset?.metadata.source === "polkadot"
+                                    ? "primary"
+                                    : "surfaceContainerHighest",
+                              },
+                            })}
+                          >
+                            <div
+                              className={css({
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                width: "100%",
+                              })}
+                            >
+                              <div
+                                className={css({
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.75rem",
+                                })}
+                              >
+                                <TokenIcon
+                                  symbol={asset.metadata.symbol}
+                                  size="md"
+                                />
+                                <span className={css({ fontWeight: "500" })}>
+                                  {asset.metadata.symbol}
+                                </span>
+                              </div>
+                              <span
+                                className={css({
+                                  fontSize: "0.875rem",
+                                  color:
+                                    selectedAsset?.id === asset.id &&
+                                    selectedAsset?.metadata.source ===
+                                      "polkadot"
+                                      ? "onPrimary"
+                                      : "content.muted",
+                                })}
+                              >
+                                To Polkadot
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Asset Hub tokens section */}
+                {availableAssets.some(
+                  (asset) => asset.metadata.source !== "polkadot",
+                ) && (
+                  <div>
+                    <h4
+                      className={css({
+                        fontSize: "0.9rem",
+                        fontWeight: "500",
+                        color: "content.muted",
+                        marginBottom: "0.75rem",
+                        paddingLeft: "0.5rem",
+                      })}
+                    >
+                      Asset Hub Tokens
+                    </h4>
+                    <div
+                      className={css({
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.75rem",
+                      })}
+                    >
+                      {availableAssets
+                        .filter((asset) => asset.metadata.source !== "polkadot")
+                        .sort((a, b) =>
+                          a.metadata.symbol.localeCompare(b.metadata.symbol),
+                        )
+                        .map((asset) => {
+                          const requiresFeePayment = needsFeePayment(asset.id);
+
+                          return (
+                            <button
+                              key={`${asset.id}-${asset.metadata.source || "default"}`}
+                              onClick={() => setSelectedAsset(asset)}
+                              className={css({
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.5rem",
+                                padding: "0.75rem 1rem",
+                                backgroundColor:
+                                  selectedAsset?.id === asset.id &&
+                                  selectedAsset?.metadata.source !== "polkadot"
+                                    ? "primary"
+                                    : "surfaceContainerHigh",
+                                color:
+                                  selectedAsset?.id === asset.id &&
+                                  selectedAsset?.metadata.source !== "polkadot"
+                                    ? "onPrimary"
+                                    : "content",
+                                border: "none",
+                                borderRadius: "lg",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                                "&:hover": {
+                                  backgroundColor:
+                                    selectedAsset?.id === asset.id &&
+                                    selectedAsset?.metadata.source !==
+                                      "polkadot"
+                                      ? "primary"
+                                      : "surfaceContainerHighest",
+                                },
+                              })}
+                            >
+                              <div
+                                className={css({
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  width: "100%",
+                                })}
+                              >
+                                <div
+                                  className={css({
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.75rem",
+                                  })}
+                                >
+                                  <TokenIcon
+                                    symbol={asset.metadata.symbol}
+                                    size="md"
+                                  />
+                                  <span className={css({ fontWeight: "500" })}>
+                                    {asset.metadata.symbol}
+                                  </span>
+                                </div>
+                                <span
+                                  className={css({
+                                    fontSize: "0.875rem",
+                                    color:
+                                      selectedAsset?.id === asset.id &&
+                                      selectedAsset?.metadata.source !==
+                                        "polkadot"
+                                        ? "onPrimary"
+                                        : "content.muted",
+                                  })}
+                                >
+                                  To Asset Hub
+                                </span>
+                              </div>
+                              {requiresFeePayment && (
+                                <div
+                                  className={css({
+                                    fontSize: "0.75rem",
+                                    color:
+                                      selectedAsset?.id === asset.id &&
+                                      selectedAsset?.metadata.source !==
+                                        "polkadot"
+                                        ? "onPrimary"
+                                        : "warning",
+                                    textAlign: "left",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.25rem",
+                                  })}
+                                >
+                                  ⚠️ Requires at least 0.1 USDT/USDC for fees
+                                </div>
+                              )}
+                            </button>
+                          );
                         })}
-                      >
-                        <div
-                          className={css({
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.75rem",
-                          })}
-                        >
-                          <TokenIcon symbol={asset.metadata.symbol} size="md" />
-                          <span className={css({ fontWeight: "500" })}>
-                            {asset.metadata.symbol}
-                          </span>
-                        </div>
-                        <span
-                          className={css({
-                            fontSize: "0.875rem",
-                            color:
-                              selectedAsset?.id === asset.id
-                                ? "onPrimary"
-                                : "content.muted",
-                          })}
-                        >
-                          {new DenominatedNumber(
-                            asset.value.free,
-                            asset.metadata.decimals,
-                          ).toLocaleString()}
-                        </span>
-                      </div>
-                      {needsFeePayment(asset.id) && (
-                        <div
-                          className={css({
-                            fontSize: "0.75rem",
-                            color:
-                              selectedAsset?.id === asset.id
-                                ? "onPrimary"
-                                : "warning",
-                            textAlign: "left",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.25rem",
-                          })}
-                        >
-                          ⚠️ Requires at least 0.1 USDT/USDC for fees to bridge
-                          out
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             {availableAssets.length === 0 && (
@@ -974,7 +1141,11 @@ export function BridgeAssetsOutDialog({
                     userSelect: "none",
                   })}
                 >
-                  Destination Account ({destinationChain})
+                  Destination Account (
+                  {selectedAsset?.metadata.source === "polkadot"
+                    ? "Polkadot"
+                    : "Asset Hub"}
+                  )
                 </label>
                 <button
                   onClick={useSelectedAccountAsDestination}
@@ -1015,7 +1186,10 @@ export function BridgeAssetsOutDialog({
               })}
             >
               <p>
-                Make sure the destination account exists on {destinationChain}{" "}
+                Make sure the destination account exists on{" "}
+                {selectedAsset?.metadata.source === "polkadot"
+                  ? "Polkadot"
+                  : "Asset Hub"}{" "}
                 and can receive the assets.
               </p>
             </div>
@@ -1160,7 +1334,11 @@ export function BridgeAssetsOutDialog({
               })}
             >
               After confirming, you will need to sign to create a proposal for
-              the transaction to bridge the assets to {destinationChain}.
+              the transaction to bridge the assets to{" "}
+              {selectedAsset?.metadata.source === "polkadot"
+                ? "Polkadot"
+                : "Asset Hub"}
+              .
             </p>
           </div>
         );
@@ -1249,25 +1427,23 @@ export function BridgeAssetsOutDialog({
                 gap: "0.5rem",
               }}
             >
-              <span>
-                <span
-                  className={css({
-                    "@media (max-width: 768px)": {
-                      display: "none",
-                    },
-                  })}
-                >
-                  Bridge Out Assets
-                </span>
-                <span
-                  className={css({
-                    "@media (min-width: 769px)": {
-                      display: "none",
-                    },
-                  })}
-                >
-                  Bridge
-                </span>
+              <span
+                className={css({
+                  "@media (max-width: 768px)": {
+                    display: "none",
+                  },
+                })}
+              >
+                Bridge Out Assets
+              </span>
+              <span
+                className={css({
+                  "@media (min-width: 769px)": {
+                    display: "none",
+                  },
+                })}
+              >
+                Bridge
               </span>
               <CheckCircleIcon size={16} />
             </div>
