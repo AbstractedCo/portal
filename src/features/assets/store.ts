@@ -33,3 +33,32 @@ export function useLazyLoadRegisteredAssets() {
 
   return tokens;
 }
+
+export function useLazyLoadInvArchExistentialDeposit() {
+  const existentialDeposit = useLazyLoadQuery((builder) =>
+    builder.getConstant("Balances", "ExistentialDeposit"),
+  );
+  const buffer = existentialDeposit + existentialDeposit / BigInt(30);
+
+  return buffer;
+}
+
+export function useLazyLoadRelayDotExistentialDeposit() {
+  const existentialDeposit = useLazyLoadQuery(
+    (builder) => builder.getConstant("Balances", "ExistentialDeposit"),
+    { chainId: "polkadot" },
+  );
+  const buffer = existentialDeposit + existentialDeposit / BigInt(30);
+
+  return buffer;
+}
+
+export function useLazyLoadAssetHubDotExistentialDeposit() {
+  const existentialDeposit = useLazyLoadQuery(
+    (builder) => builder.getConstant("Balances", "ExistentialDeposit"),
+    { chainId: "polkadot_asset_hub" },
+  );
+  const buffer = existentialDeposit * BigInt(6);
+
+  return buffer;
+}

@@ -1,6 +1,10 @@
 import { canPayFees, needsFeePayment, calculateFeeAmount } from "./fee-assets";
 import { CHAIN_CONFIG, isAssetFromAssetHub } from "./xcm-utils";
-import type { XcmVersionedLocation } from "@polkadot-api/descriptors";
+import type {
+  XcmV3Junction,
+  XcmV3Junctions,
+  XcmVersionedLocation,
+} from "@polkadot-api/descriptors";
 import { MutationError, pending } from "@reactive-dot/core";
 import { useMutation, useMutationEffect } from "@reactive-dot/react";
 import { FixedSizeBinary, type SS58String } from "polkadot-api";
@@ -21,6 +25,7 @@ export interface BridgeParams {
   amount?: bigint;
   onStatusChange?: (status: BridgeStatusChange) => void;
   onComplete?: () => void;
+  usePolkadotTransfer?: boolean;
 }
 
 // Parameters for outbound bridge operations
@@ -327,8 +332,8 @@ export function useInvArchBridgeOutOperation(
       // Create the destination for Asset Hub using the helper function
       const assetHubDest = createAssetHubDestination(destinationAccount);
 
-      // If the asset can pay fees directly, use simple transfer
-      if (canPayFees(Number(assetId))) {
+      // If the asset is DOT (assetId === 3) or can pay fees directly, use simple transfer
+      if (Number(assetId) === 3 || canPayFees(Number(assetId))) {
         const transferCall = builder.XTokens.transfer({
           currency_id: Number(assetId),
           amount,
@@ -558,27 +563,474 @@ export function validateBridgeAmount(
 }
 
 // Helper function to create Asset Hub destination
-function createAssetHubDestination(account: SS58String): XcmVersionedLocation {
+function createAssetHubDestination(
+  destinationAccount: SS58String,
+): XcmVersionedLocation {
+  const parachainJunction: XcmV3Junction = {
+    type: "Parachain",
+    value: CHAIN_CONFIG.ASSET_HUB.paraId,
+  };
+
+  const accountJunction: XcmV3Junction = {
+    type: "AccountId32",
+    value: {
+      network: undefined,
+      id: FixedSizeBinary.fromAccountId32(destinationAccount),
+    },
+  };
+
+  const interior: XcmV3Junctions = {
+    type: "X2",
+    value: [parachainJunction, accountJunction],
+  };
+
   return {
     type: "V4",
     value: {
       parents: 1,
-      interior: {
-        type: "X2",
-        value: [
-          {
-            type: "Parachain",
-            value: CHAIN_CONFIG.ASSET_HUB.paraId,
-          },
-          {
-            type: "AccountId32",
-            value: {
-              network: undefined,
-              id: FixedSizeBinary.fromAccountId32(account),
+      interior,
+    },
+  };
+}
+
+// Add a new hook for Polkadot bridge operations
+export function usePolkadotBridgeInOperation(params?: BridgeParams) {
+  const { beneficiaryAccount, amount, onStatusChange, onComplete } =
+    params || {};
+
+  // Processing state
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Set up the mutation specifically for Polkadot
+  const [_, execute] = useMutation(
+    (builder) => {
+      if (!beneficiaryAccount || !amount) {
+        throw new Error("Missing required parameters for bridge operation");
+      }
+
+      return builder.XcmPallet.limited_reserve_transfer_assets({
+        dest: {
+          type: "V4",
+          value: {
+            parents: 0,
+            interior: {
+              type: "X1",
+              value: {
+                type: "Parachain",
+                value: CHAIN_CONFIG.INVARCH.paraId,
+              },
             },
           },
-        ],
-      },
+        },
+        beneficiary: {
+          type: "V4",
+          value: {
+            parents: 0,
+            interior: {
+              type: "X1",
+              value: {
+                type: "AccountId32",
+                value: {
+                  network: undefined,
+                  id: FixedSizeBinary.fromAccountId32(beneficiaryAccount),
+                },
+              },
+            },
+          },
+        },
+        assets: {
+          type: "V4",
+          value: [
+            {
+              id: {
+                parents: 0,
+                interior: {
+                  type: "Here",
+                  value: undefined,
+                },
+              },
+              fun: {
+                type: "Fungible",
+                value: amount,
+              },
+            },
+          ],
+        },
+        fee_asset_item: 0,
+        weight_limit: {
+          type: "Unlimited",
+          value: undefined,
+        },
+      });
     },
-  } as XcmVersionedLocation;
+    { chainId: "polkadot" }, // Fixed chain ID for Polkadot
+  );
+
+  // Handle mutation events and status changes
+  useMutationEffect((event) => {
+    if (event.value === pending) {
+      setIsProcessing(true);
+      onStatusChange?.({
+        status: "pending",
+        message: "Submitting Polkadot bridge transaction...",
+      });
+      return;
+    }
+
+    if (event.value instanceof MutationError) {
+      setIsProcessing(false);
+      onStatusChange?.({
+        status: "error",
+        message: "Failed to submit Polkadot bridge transaction",
+        details: event.value,
+      });
+      return;
+    }
+
+    switch (event.value.type) {
+      case "finalized":
+        setIsProcessing(false);
+        if (event.value.ok) {
+          onStatusChange?.({
+            status: "success",
+            message: "Polkadot bridge transaction was successful!",
+            details: event.value,
+          });
+          onComplete?.();
+        } else {
+          onStatusChange?.({
+            status: "error",
+            message: "Transaction failed",
+            details: event.value,
+          });
+        }
+        break;
+      default:
+        onStatusChange?.({
+          status: "pending",
+          message: "Transaction pending...",
+          details: event.value,
+        });
+    }
+  });
+
+  // Function to execute the bridge operation
+  const executeBridge = async () => {
+    if (!beneficiaryAccount || !amount) {
+      throw new Error("Missing required parameters for bridge operation");
+    }
+
+    setIsProcessing(true);
+    return execute() as Promise<unknown>;
+  };
+
+  return {
+    executeBridge,
+    isProcessing,
+  };
+}
+
+type Asset = {
+  id: number;
+  value: {
+    free: bigint;
+    reserved: bigint;
+    frozen: bigint;
+  };
+  metadata: {
+    symbol: string;
+    decimals: number;
+    name: string;
+    existential_deposit: bigint;
+    source?: string;
+  };
+};
+
+export function useAssetHubBridgeOutOperation(params: {
+  daoId: string;
+  selectedAsset: Asset | null;
+  amount: bigint | undefined;
+  destinationAccount: SS58String | undefined;
+  onStatusChange: (status: BridgeStatusChange) => void;
+}) {
+  const { daoId, selectedAsset, amount, destinationAccount, onStatusChange } =
+    params;
+  const [_, execute] = useMutation(
+    (builder) => {
+      if (!selectedAsset || !amount || !destinationAccount) {
+        throw new Error("Missing required parameters for bridge");
+      }
+
+      // For DOT (assetId === 3), use the special transfer method
+      if (selectedAsset.id === 3) {
+        const transferCall =
+          builder.PolkadotXcm.transfer_assets_using_type_and_then({
+            dest: {
+              type: "V4",
+              value: {
+                parents: 1,
+                interior: {
+                  type: "X1",
+                  value: {
+                    type: "Parachain",
+                    value: CHAIN_CONFIG.ASSET_HUB.paraId,
+                  },
+                },
+              },
+            },
+            assets: {
+              type: "V4",
+              value: [
+                {
+                  id: {
+                    parents: 1,
+                    interior: {
+                      type: "Here",
+                      value: undefined,
+                    },
+                  },
+                  fun: {
+                    type: "Fungible",
+                    value: amount,
+                  },
+                },
+              ],
+            },
+            assets_transfer_type: {
+              type: "DestinationReserve",
+              value: undefined,
+            },
+            remote_fees_id: {
+              type: "V4",
+              value: {
+                parents: 1,
+                interior: {
+                  type: "Here",
+                  value: undefined,
+                },
+              },
+            },
+            fees_transfer_type: {
+              type: "DestinationReserve",
+              value: undefined,
+            },
+            custom_xcm_on_dest: {
+              type: "V4",
+              value: [
+                {
+                  type: "DepositAsset",
+                  value: {
+                    assets: {
+                      type: "Wild",
+                      value: {
+                        type: "All",
+                        value: undefined,
+                      },
+                    },
+                    beneficiary: {
+                      parents: 0,
+                      interior: {
+                        type: "X1",
+                        value: {
+                          type: "AccountId32",
+                          value: {
+                            network: undefined,
+                            id: FixedSizeBinary.fromAccountId32(
+                              destinationAccount,
+                            ),
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+            weight_limit: {
+              type: "Unlimited",
+              value: undefined,
+            },
+          });
+
+        // Wrap in DAO operation
+        return builder.INV4.operate_multisig({
+          dao_id: parseInt(daoId),
+          call: transferCall.decodedCall,
+          fee_asset: { type: "Native", value: undefined },
+          metadata: undefined,
+        });
+      }
+
+      // For other assets, use the standard transfer
+      const transferCall = builder.XTokens.transfer({
+        currency_id: selectedAsset.id,
+        amount,
+        dest: createAssetHubDestination(destinationAccount),
+        dest_weight_limit: {
+          type: "Unlimited",
+          value: undefined,
+        },
+      });
+
+      // Wrap in DAO operation
+      return builder.INV4.operate_multisig({
+        dao_id: parseInt(daoId),
+        call: transferCall.decodedCall,
+        fee_asset: { type: "Native", value: undefined },
+        metadata: undefined,
+      });
+    },
+    { chainId: "invarch" },
+  );
+
+  // Handle mutation events
+  useMutationEffect((event) => {
+    if (event.value === pending) {
+      onStatusChange({
+        status: "pending",
+        message: "Submitting bridge to Asset Hub transaction...",
+      });
+      return;
+    }
+
+    if (event.value instanceof MutationError) {
+      onStatusChange({
+        status: "error",
+        message: "Failed to submit bridge transaction: " + event.value.message,
+      });
+      return;
+    }
+
+    switch (event.value.type) {
+      case "finalized":
+        if (event.value.ok) {
+          onStatusChange({
+            status: "success",
+            message: "Bridge to Asset Hub transaction was successful!",
+          });
+        } else {
+          onStatusChange({
+            status: "error",
+            message: "Transaction failed",
+          });
+        }
+        break;
+      default:
+        onStatusChange({
+          status: "pending",
+          message: "Transaction pending...",
+        });
+    }
+  });
+
+  const executeBridge = async () => {
+    if (!selectedAsset || !amount || !destinationAccount) {
+      throw new Error("Missing required parameters for bridge");
+    }
+    return execute() as Promise<unknown>;
+  };
+
+  return { executeBridge };
+}
+
+export function usePolkadotBridgeOutOperation(params: {
+  daoId: string;
+  selectedAsset: Asset | null;
+  amount: bigint | undefined;
+  destinationAccount: SS58String | undefined;
+  onStatusChange: (status: BridgeStatusChange) => void;
+}) {
+  const { daoId, selectedAsset, amount, destinationAccount, onStatusChange } =
+    params;
+  const [_, execute] = useMutation(
+    (builder) => {
+      if (!selectedAsset || !amount || !destinationAccount) {
+        throw new Error("Missing required parameters for bridge");
+      }
+
+      // Create the transfer call for Polkadot
+      const transferCall = builder.XTokens.transfer({
+        currency_id: selectedAsset.id,
+        amount,
+        dest: {
+          type: "V4",
+          value: {
+            parents: 1,
+            interior: {
+              type: "X1",
+              value: {
+                type: "AccountId32",
+                value: {
+                  network: undefined,
+                  id: FixedSizeBinary.fromAccountId32(destinationAccount),
+                },
+              },
+            },
+          },
+        },
+        dest_weight_limit: {
+          type: "Unlimited",
+          value: undefined,
+        },
+      });
+
+      // Wrap in DAO operation
+      return builder.INV4.operate_multisig({
+        dao_id: parseInt(daoId),
+        call: transferCall.decodedCall,
+        fee_asset: { type: "Native", value: undefined },
+        metadata: undefined,
+      });
+    },
+    { chainId: "invarch" },
+  );
+
+  // Handle mutation events
+  useMutationEffect((event) => {
+    if (event.value === pending) {
+      onStatusChange({
+        status: "pending",
+        message: "Submitting bridge to Polkadot transaction...",
+      });
+      return;
+    }
+
+    if (event.value instanceof MutationError) {
+      onStatusChange({
+        status: "error",
+        message: "Failed to submit bridge transaction: " + event.value.message,
+      });
+      return;
+    }
+
+    switch (event.value.type) {
+      case "finalized":
+        if (event.value.ok) {
+          onStatusChange({
+            status: "success",
+            message: "Bridge to Polkadot transaction was successful!",
+          });
+        } else {
+          onStatusChange({
+            status: "error",
+            message: "Transaction failed",
+          });
+        }
+        break;
+      default:
+        onStatusChange({
+          status: "pending",
+          message: "Transaction pending...",
+        });
+    }
+  });
+
+  const executeBridge = async () => {
+    if (!selectedAsset || !amount || !destinationAccount) {
+      throw new Error("Missing required parameters for bridge");
+    }
+    return execute() as Promise<unknown>;
+  };
+
+  return { executeBridge };
 }

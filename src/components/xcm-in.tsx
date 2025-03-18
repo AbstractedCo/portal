@@ -1,7 +1,12 @@
 import { css } from "../../styled-system/css";
 import { useNotification } from "../contexts/notification-context";
 import { selectedAccountAtom } from "../features/accounts/store";
-import { useLazyLoadRegisteredAssets } from "../features/assets/store";
+import {
+  useLazyLoadRegisteredAssets,
+  useLazyLoadInvArchExistentialDeposit,
+  useLazyLoadRelayDotExistentialDeposit,
+  useLazyLoadAssetHubDotExistentialDeposit,
+} from "../features/assets/store";
 import {
   useAssetHubBridgeInOperation,
   type BridgeStatusChange,
@@ -9,6 +14,8 @@ import {
   isNativeToken,
   needsFeePayment,
 } from "../features/xcm/bridge-utils";
+import { usePolkadotBridgeInOperation } from "../features/xcm/bridge-utils";
+import { calculateSafeMaxAmount } from "../features/xcm/fee-assets";
 import { getAssetHubId } from "../features/xcm/xcm-utils";
 import { Button } from "./button";
 import { ModalDialog } from "./modal-dialog";
@@ -21,43 +28,100 @@ import { useMutation, useMutationEffect } from "@reactive-dot/react";
 import { DenominatedNumber } from "@reactive-dot/utils";
 import { useAtomValue } from "jotai";
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from "lucide-react";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 
-// Add constants for VARCH token
-const VARCH_EXISTENTIAL_DEPOSIT = 10_000_000_000n;
-const VARCH_BUFFER = VARCH_EXISTENTIAL_DEPOSIT * 2n;
+// Define the Asset type used throughout the component
+type Asset = {
+  id: number;
+  metadata: {
+    symbol: string;
+    decimals: number;
+    name: string;
+    existential_deposit: bigint;
+    location: XcmVersionedLocation | undefined;
+    additional: bigint;
+    source?: string;
+  };
+  isNativeVarch?: boolean;
+};
 
 interface BridgeAssetsInDialogProps {
   daoAddress: string;
   onClose: () => void;
 }
 
+// Add a helper function to create DOT asset entries
+function createDOTAssetEntries(baseAsset: Asset): Asset[] {
+  if (baseAsset.id !== 3 || baseAsset.metadata.symbol !== "DOT") {
+    return [baseAsset];
+  }
+
+  return [
+    // DOT from Polkadot (parent chain)
+    {
+      ...baseAsset,
+      metadata: {
+        ...baseAsset.metadata,
+        name: "DOT (from Polkadot)",
+        location: {
+          type: "V4",
+          value: {
+            parents: 0,
+            interior: {
+              type: "Here",
+              value: undefined,
+            },
+          },
+        },
+        source: "polkadot",
+      },
+    },
+    // DOT from Asset Hub
+    {
+      ...baseAsset,
+      metadata: {
+        ...baseAsset.metadata,
+        name: "DOT (from Asset Hub)",
+        location: {
+          type: "V4",
+          value: {
+            parents: 1,
+            interior: {
+              type: "Here",
+              value: undefined,
+            },
+          },
+        },
+        source: "asset_hub",
+      },
+    },
+  ];
+}
+
 export function BridgeAssetsInDialog({
   daoAddress,
   onClose,
 }: BridgeAssetsInDialogProps) {
-  const [selectedAsset, setSelectedAsset] = useState<{
-    id: number;
-    metadata: {
-      symbol: string;
-      decimals: number;
-      name: string;
-      existential_deposit: bigint;
-      location: XcmVersionedLocation | undefined;
-      additional: bigint;
-    };
-    isNativeVarch?: boolean; // Flag to indicate if this is the native VARCH token
-  } | null>(null);
-
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<"select-asset" | "enter-amount" | "review">(
     "select-asset",
   );
   const [showEDConfirmation, setShowEDConfirmation] = useState(false);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const { showNotification } = useNotification();
   const registeredAssets = useLazyLoadRegisteredAssets();
   const selectedAccount = useAtomValue(selectedAccountAtom);
+
+  // Get buffered existential deposits
+  const varchExistentialDeposit = useLazyLoadInvArchExistentialDeposit();
+  const relayDotExistentialDeposit = useLazyLoadRelayDotExistentialDeposit();
+  const assetHubDotExistentialDeposit =
+    useLazyLoadAssetHubDotExistentialDeposit();
+
+  // Add state for max amount
+  const [maxAmountValue, setMaxAmountValue] = useState("0");
 
   // Query user's native VARCH balance
   const nativeBalance = useLazyLoadQuery((builder) =>
@@ -152,7 +216,10 @@ export function BridgeAssetsInDialog({
     (builder) => {
       if (!selectedAsset || !selectedAccount?.address) return undefined;
 
-      // For native tokens like DOT
+      // Skip query if the asset is from Polkadot
+      if (selectedAsset.metadata.source === "polkadot") return undefined;
+
+      // For native tokens like DOT from Asset Hub
       if (
         selectedAsset.metadata.location &&
         isNativeToken(selectedAsset.metadata.location)
@@ -177,6 +244,24 @@ export function BridgeAssetsInDialog({
       return undefined;
     },
     { chainId: "polkadot_asset_hub" },
+  );
+
+  // Add a new query for Polkadot balance
+  const polkadotBalance = useLazyLoadQuery(
+    (builder) => {
+      if (
+        !selectedAsset ||
+        !selectedAccount?.address ||
+        selectedAsset.metadata.source !== "polkadot"
+      )
+        return undefined;
+
+      // Query balance directly from Polkadot for DOT
+      return builder.readStorage("System", "Account", [
+        selectedAccount.address,
+      ]);
+    },
+    { chainId: "polkadot" },
   );
 
   // Function to handle status changes from the bridge
@@ -263,13 +348,33 @@ export function BridgeAssetsInDialog({
     }
   });
 
-  // Only provide bridge parameters when they're all valid
+  // Modify the getFilteredAssets function to use proper typing
+  const getFilteredAssets = (): Asset[] => {
+    return registeredAssets.flatMap((asset: Asset) => {
+      try {
+        // Only include assets that have location and supported bridge
+        if (!asset.metadata.location) return [];
+
+        // For DOT, create two entries
+        if (asset.id === 3 && asset.metadata.symbol === "DOT") {
+          return createDOTAssetEntries(asset);
+        }
+
+        // For other assets, check bridge support normally
+        return isBridgeSupportedIn(asset.metadata.location) ? [asset] : [];
+      } catch (error) {
+        console.warn("Error checking bridge support for asset:", asset, error);
+        return [];
+      }
+    });
+  };
+
+  // Modify the getBridgeParams function to handle different DOT sources
   const getBridgeParams = () => {
     const assetId = getAssetId();
     const rawAmount = getRawAmount();
     const beneficiaryAccount = daoAddress;
 
-    // Add debugging information
     console.log("Asset ID:", assetId);
     console.log("Raw amount:", rawAmount);
     console.log("Selected asset:", selectedAsset);
@@ -283,27 +388,33 @@ export function BridgeAssetsInDialog({
       return undefined;
     }
 
-    // If we have a native token, assetId might be optional in some cases
-    // Otherwise, ensure we have a valid assetId
+    // If this is DOT from Polkadot, use different transfer parameters
     if (
-      !isNativeToken(selectedAsset.metadata.location) &&
-      assetId === undefined
+      selectedAsset.id === 3 &&
+      selectedAsset.metadata.source === "polkadot"
     ) {
-      console.log(
-        "Asset ID is required for non-native tokens but is undefined",
-      );
-      return undefined;
+      return {
+        beneficiaryAccount,
+        assetId: BigInt(3),
+        amount: rawAmount,
+        onStatusChange: handleBridgeStatusChange,
+        onComplete: () => {
+          setIsProcessing(false);
+          showNotification({
+            variant: "success",
+            message: `Bridge of ${amount} ${selectedAsset.metadata.symbol} initiated successfully!`,
+          });
+          onClose();
+        },
+        usePolkadotTransfer: true, // Flag to use Polkadot transfer
+      };
     }
 
-    // For non-native tokens, we must have verified there's a valid assetId above
-    // This ensures assetId is always a bigint for non-native tokens
-    // For native tokens, default to 0n if needed
-    const finalAssetId = assetId !== undefined ? assetId : 0n;
-
+    // For DOT from Asset Hub or other assets, use the regular parameters
     return {
       beneficiaryAccount,
       assetLocation: selectedAsset.metadata.location,
-      assetId: finalAssetId,
+      assetId: assetId !== undefined ? assetId : 0n,
       amount: rawAmount,
       onStatusChange: handleBridgeStatusChange,
       onComplete: () => {
@@ -320,148 +431,8 @@ export function BridgeAssetsInDialog({
   // Set up the Asset Hub bridge with the current parameters
   const assetHubBridge = useAssetHubBridgeInOperation(getBridgeParams());
 
-  // Handle bridge operation
-  const handleBridgeIn = async () => {
-    if (!selectedAsset || !daoAddress || !amount || !selectedAccount) {
-      showNotification({
-        variant: "error",
-        message:
-          "Please select an asset, enter an amount, and connect a wallet.",
-      });
-      return;
-    }
-
-    // Validate amount format
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      showNotification({
-        variant: "error",
-        message: "Please enter a valid amount greater than zero.",
-      });
-      return;
-    }
-
-    // Get raw amount and validate it
-    const rawAmount = getRawAmount();
-    if (rawAmount === undefined) {
-      showNotification({
-        variant: "error",
-        message:
-          "Could not convert amount to the correct format. Please check your input.",
-      });
-      return;
-    }
-
-    try {
-      // If this is native VARCH, use regular transfer instead of bridge
-      if (selectedAsset.isNativeVarch) {
-        console.log("Starting native VARCH transfer");
-        await executeNativeTransfer();
-        return;
-      }
-
-      // For other assets, use the bridge
-      console.log("Starting bridge execution with params:", getBridgeParams());
-      // Execute the bridge operation
-      await assetHubBridge.executeBridge();
-    } catch (error) {
-      console.error("Failed to submit transaction:", error);
-      showNotification({
-        variant: "error",
-        message:
-          "Failed to submit transaction: " +
-          (error instanceof Error ? error.message : "Unknown error"),
-      });
-      setIsProcessing(false);
-    }
-  };
-
-  // Filter assets to only show those with supported bridges
-  const getFilteredAssets = () => {
-    return registeredAssets.filter((asset) => {
-      try {
-        // Only include assets that have location and supported bridge
-        if (!asset.metadata.location) return false;
-        return isBridgeSupportedIn(asset.metadata.location);
-      } catch (error) {
-        // If there's any error in checking bridge support, exclude the asset
-        console.warn("Error checking bridge support for asset:", asset, error);
-        return false;
-      }
-    });
-  };
-
-  // Get formatted balance for display
-  const getFormattedBalance = () => {
-    if (!selectedAsset) return "Loading...";
-
-    try {
-      // For native VARCH token
-      if (selectedAsset.isNativeVarch) {
-        if (
-          nativeBalance &&
-          typeof nativeBalance === "object" &&
-          "data" in nativeBalance &&
-          nativeBalance.data
-        ) {
-          return (
-            new DenominatedNumber(
-              nativeBalance.data.free || 0n,
-              selectedAsset.metadata.decimals,
-            ).toLocaleString() +
-            " " +
-            selectedAsset.metadata.symbol
-          );
-        }
-        return "Loading...";
-      }
-
-      // For other assets, use the existing code
-      if (!assetHubBalance) return "Loading...";
-
-      // For native tokens (like DOT)
-      if (
-        selectedAsset.metadata.location &&
-        isNativeToken(selectedAsset.metadata.location)
-      ) {
-        if (typeof assetHubBalance === "object" && "data" in assetHubBalance) {
-          const freeBalance = assetHubBalance.data?.free || 0n;
-          return (
-            new DenominatedNumber(
-              freeBalance,
-              selectedAsset.metadata.decimals,
-            ).toLocaleString() +
-            " " +
-            selectedAsset.metadata.symbol
-          );
-        }
-      }
-
-      // For other assets
-      if (typeof assetHubBalance === "object" && "balance" in assetHubBalance) {
-        return (
-          new DenominatedNumber(
-            assetHubBalance.balance ?? 0n,
-            selectedAsset.metadata.decimals,
-          ).toLocaleString() +
-          " " +
-          selectedAsset.metadata.symbol
-        );
-      }
-
-      return "Loading...";
-    } catch (error) {
-      console.warn("Error formatting balance:", error);
-      return "Error loading balance";
-    }
-  };
-
-  // Determine if we can proceed based on current step
-  const canProceed = () => {
-    if (step === "select-asset") return !!selectedAsset;
-    if (step === "enter-amount") return !!amount && parseFloat(amount) > 0;
-    return true;
-  };
+  // Set up the Polkadot bridge with the current parameters
+  const polkadotBridge = usePolkadotBridgeInOperation(getBridgeParams());
 
   // Add new state variables for existential deposit check
   const [isRemainderBelowED, setIsRemainderBelowED] = useState(false);
@@ -493,38 +464,200 @@ export function BridgeAssetsInDialog({
     }
   }, [step, selectedAsset, amount]);
 
-  // Modify handleNextStep to include ED check
-  const handleNextStep = () => {
-    if (step === "select-asset" && selectedAsset) {
-      setStep("enter-amount");
-    } else if (step === "enter-amount" && amount) {
-      // Check if amount is below existential deposit
-      if (isRemainderBelowED && !showEDConfirmation) {
-        // Show confirmation dialog instead of proceeding
-        setShowEDConfirmation(true);
+  // Get formatted balance for display
+  const getFormattedBalance = () => {
+    if (!selectedAsset) return "Loading...";
+
+    try {
+      console.log("Getting balance for asset:", {
+        asset: selectedAsset,
+        source: selectedAsset.metadata.source,
+        polkadotBalance,
+        assetHubBalance,
+      });
+
+      // For native VARCH token
+      if (selectedAsset.isNativeVarch) {
+        if (
+          nativeBalance &&
+          typeof nativeBalance === "object" &&
+          "data" in nativeBalance &&
+          nativeBalance.data
+        ) {
+          return (
+            new DenominatedNumber(
+              nativeBalance.data.free || 0n,
+              selectedAsset.metadata.decimals,
+            ).toLocaleString() +
+            " " +
+            selectedAsset.metadata.symbol
+          );
+        }
+        return "Loading...";
+      }
+
+      // For DOT from Polkadot
+      if (selectedAsset.metadata.source === "polkadot") {
+        console.log("Formatting Polkadot balance:", polkadotBalance);
+        if (!polkadotBalance) return "Loading...";
+        if (
+          typeof polkadotBalance === "object" &&
+          "data" in polkadotBalance &&
+          polkadotBalance.data
+        ) {
+          const freeBalance = polkadotBalance.data.free || 0n;
+          return (
+            new DenominatedNumber(
+              freeBalance,
+              selectedAsset.metadata.decimals,
+            ).toLocaleString() +
+            " " +
+            selectedAsset.metadata.symbol
+          );
+        }
+        return "Loading...";
+      }
+
+      // For other assets from Asset Hub
+      console.log("Formatting Asset Hub balance:", assetHubBalance);
+      if (!assetHubBalance) return "Loading...";
+
+      // For native tokens from Asset Hub (like DOT)
+      if (
+        selectedAsset.metadata.location &&
+        isNativeToken(selectedAsset.metadata.location)
+      ) {
+        if (
+          typeof assetHubBalance === "object" &&
+          "data" in assetHubBalance &&
+          assetHubBalance.data
+        ) {
+          const freeBalance = assetHubBalance.data.free || 0n;
+          return (
+            new DenominatedNumber(
+              freeBalance,
+              selectedAsset.metadata.decimals,
+            ).toLocaleString() +
+            " " +
+            selectedAsset.metadata.symbol
+          );
+        }
+      }
+
+      // For other assets
+      if (typeof assetHubBalance === "object" && "balance" in assetHubBalance) {
+        return (
+          new DenominatedNumber(
+            assetHubBalance.balance ?? 0n,
+            selectedAsset.metadata.decimals,
+          ).toLocaleString() +
+          " " +
+          selectedAsset.metadata.symbol
+        );
+      }
+
+      return "Loading...";
+    } catch (error) {
+      console.warn("Error formatting balance:", error);
+      return "Error loading balance";
+    }
+  };
+
+  // Add effect to calculate max amount when balance changes
+  useEffect(() => {
+    const calculateMaxAmount = () => {
+      if (!selectedAsset || !selectedAccount?.address) {
+        setMaxAmountValue("0");
         return;
       }
 
-      // Reset the confirmation dialog when moving to review step
-      setShowEDConfirmation(false);
-      setStep("review");
-    }
-  };
+      try {
+        // For DOT from Polkadot
+        if (selectedAsset.metadata.source === "polkadot" && polkadotBalance) {
+          if (
+            typeof polkadotBalance === "object" &&
+            "data" in polkadotBalance &&
+            polkadotBalance.data
+          ) {
+            const freeBalance = polkadotBalance.data.free || 0n;
+            const { formattedAmount } = calculateSafeMaxAmount({
+              balance: freeBalance,
+              existentialDeposit: relayDotExistentialDeposit,
+              decimals: selectedAsset.metadata.decimals,
+            });
+            setMaxAmountValue(formattedAmount);
+            return;
+          }
+        }
 
-  // Handle going back to the previous step
-  const handleBackStep = () => {
-    if (step === "enter-amount") {
-      // Reset the confirmation dialog when going back
-      setShowEDConfirmation(false);
-      setStep("select-asset");
-    } else if (step === "review") {
-      setStep("enter-amount");
-    }
-  };
+        // For DOT from Asset Hub
+        if (selectedAsset.metadata.source === "asset_hub" && assetHubBalance) {
+          if (
+            typeof assetHubBalance === "object" &&
+            "data" in assetHubBalance &&
+            assetHubBalance.data
+          ) {
+            const freeBalance = assetHubBalance.data.free || 0n;
+            const { formattedAmount } = calculateSafeMaxAmount({
+              balance: freeBalance,
+              existentialDeposit: assetHubDotExistentialDeposit,
+              decimals: selectedAsset.metadata.decimals,
+            });
+            setMaxAmountValue(formattedAmount);
+            return;
+          }
+        }
+
+        // For native VARCH
+        if (selectedAsset.isNativeVarch && nativeBalance) {
+          if (
+            typeof nativeBalance === "object" &&
+            "data" in nativeBalance &&
+            nativeBalance.data
+          ) {
+            const freeBalance = nativeBalance.data.free || 0n;
+            const { formattedAmount } = calculateSafeMaxAmount({
+              balance: freeBalance,
+              existentialDeposit: varchExistentialDeposit,
+              decimals: selectedAsset.metadata.decimals,
+            });
+            setMaxAmountValue(formattedAmount);
+            return;
+          }
+        }
+
+        setMaxAmountValue("0");
+      } catch (error) {
+        console.error("Error calculating max amount:", error);
+        setMaxAmountValue("0");
+      }
+    };
+
+    calculateMaxAmount();
+  }, [
+    selectedAsset,
+    polkadotBalance,
+    assetHubBalance,
+    nativeBalance,
+    selectedAccount,
+    varchExistentialDeposit,
+    relayDotExistentialDeposit,
+    assetHubDotExistentialDeposit,
+  ]);
 
   // Get the free balance based on token type
   const getFreeBalance = useCallback(() => {
     if (!selectedAsset?.isNativeVarch) {
+      // For DOT from Polkadot
+      if (selectedAsset?.metadata.source === "polkadot") {
+        if (!polkadotBalance) return 0n;
+        if (typeof polkadotBalance === "object" && "data" in polkadotBalance) {
+          return polkadotBalance.data?.free || 0n;
+        }
+        return 0n;
+      }
+
+      // For Asset Hub assets
       if (!assetHubBalance) return 0n;
       if (typeof assetHubBalance === "object" && "balance" in assetHubBalance) {
         return assetHubBalance.balance ?? 0n;
@@ -539,50 +672,206 @@ export function BridgeAssetsInDialog({
       }
     }
     return 0n;
-  }, [selectedAsset, assetHubBalance, nativeBalance]);
+  }, [selectedAsset, assetHubBalance, polkadotBalance, nativeBalance]);
 
-  // Calculate max amount considering existential deposit
-  const maxAmount = useMemo(() => {
-    const freeBalance = getFreeBalance();
+  // Modify validateAmount to avoid state updates during render
+  const validateAmount = (value: string) => {
+    if (!selectedAsset) return false;
 
-    // For VARCH, consider existential deposit and buffer
-    if (selectedAsset?.isNativeVarch) {
-      const minimumRequired = VARCH_EXISTENTIAL_DEPOSIT + VARCH_BUFFER;
-      if (freeBalance <= minimumRequired) return "0";
-      const safeMaximum = freeBalance - minimumRequired;
-      return new DenominatedNumber(
-        safeMaximum,
-        selectedAsset.metadata.decimals,
-      ).toString();
-    }
+    try {
+      // Parse the amount to a float
+      const parsedAmount = parseFloat(value);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) return false;
 
-    // For other assets, use full free balance
-    if (selectedAsset) {
-      return new DenominatedNumber(
-        freeBalance,
-        selectedAsset.metadata.decimals,
-      ).toString();
-    }
+      const rawAmount = BigInt(
+        Math.floor(
+          parsedAmount * Math.pow(10, selectedAsset.metadata.decimals),
+        ),
+      );
+      const freeBalance = getFreeBalance();
 
-    return "0";
-  }, [selectedAsset, getFreeBalance]);
-
-  // Handle amount changes with validation
-  const handleAmountChange = useCallback(
-    (value: string) => {
-      if (value === maxAmount) {
-        setAmount(value);
-      } else {
-        const regex = new RegExp(
-          `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
-        );
-        if (value === "" || regex.test(value)) {
-          setAmount(value);
+      // Check minimum balance requirements based on asset type
+      if (selectedAsset.metadata.source === "polkadot") {
+        if (freeBalance - rawAmount < relayDotExistentialDeposit) {
+          return false;
+        }
+      } else if (selectedAsset.metadata.source === "asset_hub") {
+        if (freeBalance - rawAmount < assetHubDotExistentialDeposit) {
+          return false;
+        }
+      } else if (selectedAsset.isNativeVarch) {
+        if (freeBalance - rawAmount < varchExistentialDeposit) {
+          return false;
         }
       }
-    },
-    [maxAmount, selectedAsset?.metadata.decimals, setAmount],
-  );
+
+      return true;
+    } catch (error) {
+      console.error("Error validating amount:", error);
+      return false;
+    }
+  };
+
+  // Add useEffect to handle warning message updates
+  useEffect(() => {
+    if (!amount || !selectedAsset) {
+      setWarningMessage(null);
+      return;
+    }
+
+    try {
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        setWarningMessage(null);
+        return;
+      }
+
+      const rawAmount = BigInt(
+        Math.floor(
+          parsedAmount * Math.pow(10, selectedAsset.metadata.decimals),
+        ),
+      );
+      const freeBalance = getFreeBalance();
+
+      if (selectedAsset.metadata.source === "polkadot") {
+        if (freeBalance - rawAmount < relayDotExistentialDeposit) {
+          setWarningMessage(
+            "You must keep enough DOT to maintain the existential deposit",
+          );
+          return;
+        }
+      } else if (selectedAsset.metadata.source === "asset_hub") {
+        if (freeBalance - rawAmount < assetHubDotExistentialDeposit) {
+          setWarningMessage(
+            "You must keep enough DOT to maintain the existential deposit",
+          );
+          return;
+        }
+      } else if (selectedAsset.isNativeVarch) {
+        if (freeBalance - rawAmount < varchExistentialDeposit) {
+          setWarningMessage(
+            "You must keep enough VARCH to maintain the existential deposit",
+          );
+          return;
+        }
+      }
+
+      setWarningMessage(null);
+    } catch (error) {
+      console.error("Error updating warning message:", error);
+      setWarningMessage(null);
+    }
+  }, [
+    amount,
+    selectedAsset,
+    getFreeBalance,
+    relayDotExistentialDeposit,
+    assetHubDotExistentialDeposit,
+    varchExistentialDeposit,
+  ]);
+
+  // Determine if we can proceed based on current step
+  const canProceed = () => {
+    if (step === "select-asset") return !!selectedAsset;
+    if (step === "enter-amount") {
+      if (!amount || parseFloat(amount) <= 0) return false;
+      return validateAmount(amount);
+    }
+    return true;
+  };
+
+  // Handle bridge operation
+  const handleBridgeIn = async () => {
+    try {
+      if (!selectedAsset || !amount || !daoAddress) {
+        showNotification({
+          variant: "error",
+          message: "Please fill in all required fields",
+        });
+        return;
+      }
+
+      // Validate amount before proceeding
+      if (!validateAmount(amount)) {
+        return;
+      }
+
+      setIsProcessing(true);
+
+      // Get bridge parameters
+      const params = getBridgeParams();
+      if (!params) {
+        showNotification({
+          variant: "error",
+          message: "Failed to get bridge parameters",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      // If this is native VARCH, use regular transfer instead of bridge
+      if (selectedAsset.isNativeVarch) {
+        console.log("Starting native VARCH transfer");
+        await executeNativeTransfer();
+        return;
+      }
+
+      // For other assets, use the appropriate bridge
+      console.log("Starting bridge execution with params:", params);
+      if (selectedAsset.metadata.source === "polkadot") {
+        await polkadotBridge.executeBridge();
+      } else {
+        await assetHubBridge.executeBridge();
+      }
+    } catch (err) {
+      console.error("Bridge transaction failed:", err);
+      showNotification({
+        variant: "error",
+        message:
+          "Failed to submit transaction: " +
+          (err instanceof Error ? err.message : "Unknown error"),
+      });
+      setIsProcessing(false);
+    }
+  };
+
+  // Update handleNextStep to include validation
+  const handleNextStep = () => {
+    if (step === "select-asset" && selectedAsset) {
+      setStep("enter-amount");
+    } else if (step === "enter-amount" && amount && daoAddress) {
+      // Check if amount is below existential deposit
+      if (isRemainderBelowED && !showEDConfirmation) {
+        // Show confirmation dialog instead of proceeding
+        setShowEDConfirmation(true);
+        return;
+      }
+
+      // Validate amount before proceeding
+      if (!validateAmount(amount)) {
+        return;
+      }
+
+      // Reset the confirmation dialog when moving to review step
+      setShowEDConfirmation(false);
+      setStep("review");
+    }
+  };
+
+  // Handle going back to the previous step
+  const handleBackStep = () => {
+    if (step === "enter-amount") {
+      // Reset the confirmation dialog, amount, and warning message when going back
+      setShowEDConfirmation(false);
+      setAmount("");
+      setWarningMessage(null);
+      setStep("select-asset");
+      // Also clear the selected asset when going back to asset selection
+      setSelectedAsset(null);
+    } else if (step === "review") {
+      setStep("enter-amount");
+    }
+  };
 
   // Render appropriate content based on the current step
   const renderStepContent = () => {
@@ -708,9 +997,11 @@ export function BridgeAssetsInDialog({
                 </button>
               </div>
 
-              {/* Bridged assets section */}
-              {filteredAssets.length > 0 && (
-                <div>
+              {/* Polkadot tokens section */}
+              {filteredAssets.some(
+                (asset) => asset.metadata.source === "polkadot",
+              ) && (
+                <div className={css({ marginBottom: "1.5rem" })}>
                   <h4
                     className={css({
                       fontSize: "0.9rem",
@@ -720,7 +1011,7 @@ export function BridgeAssetsInDialog({
                       paddingLeft: "0.5rem",
                     })}
                   >
-                    Asset Hub Tokens
+                    Polkadot Tokens
                   </h4>
                   <div
                     className={css({
@@ -729,16 +1020,11 @@ export function BridgeAssetsInDialog({
                       gap: "0.75rem",
                     })}
                   >
-                    {filteredAssets.map((asset) => {
-                      // Only check needsFeePayment for non-native tokens from Asset Hub
-                      const requiresFeePayment =
-                        asset.metadata.location &&
-                        !isNativeToken(asset.metadata.location) &&
-                        needsFeePayment(asset.id);
-
-                      return (
+                    {filteredAssets
+                      .filter((asset) => asset.metadata.source === "polkadot")
+                      .map((asset) => (
                         <button
-                          key={asset.id}
+                          key={`${asset.id}-${asset.metadata.source}`}
                           onClick={() => setSelectedAsset(asset)}
                           className={css({
                             display: "flex",
@@ -746,11 +1032,13 @@ export function BridgeAssetsInDialog({
                             gap: "0.5rem",
                             padding: "0.75rem 1rem",
                             backgroundColor:
-                              selectedAsset?.id === asset.id
+                              selectedAsset?.id === asset.id &&
+                              selectedAsset?.metadata.source === "polkadot"
                                 ? "primary"
                                 : "surfaceContainerHigh",
                             color:
-                              selectedAsset?.id === asset.id
+                              selectedAsset?.id === asset.id &&
+                              selectedAsset?.metadata.source === "polkadot"
                                 ? "onPrimary"
                                 : "content",
                             border: "none",
@@ -759,7 +1047,8 @@ export function BridgeAssetsInDialog({
                             transition: "all 0.2s ease",
                             "&:hover": {
                               backgroundColor:
-                                selectedAsset?.id === asset.id
+                                selectedAsset?.id === asset.id &&
+                                selectedAsset?.metadata.source === "polkadot"
                                   ? "primary"
                                   : "surfaceContainerHighest",
                             },
@@ -792,35 +1081,148 @@ export function BridgeAssetsInDialog({
                               className={css({
                                 fontSize: "0.875rem",
                                 color:
-                                  selectedAsset?.id === asset.id
+                                  selectedAsset?.id === asset.id &&
+                                  selectedAsset?.metadata.source === "polkadot"
                                     ? "onPrimary"
                                     : "content.muted",
                               })}
                             >
-                              {asset.metadata.name}
+                              From Polkadot
                             </span>
                           </div>
-                          {requiresFeePayment && (
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Asset Hub tokens section */}
+              {filteredAssets.some(
+                (asset) => asset.metadata.source !== "polkadot",
+              ) && (
+                <div>
+                  <h4
+                    className={css({
+                      fontSize: "0.9rem",
+                      fontWeight: "500",
+                      color: "content.muted",
+                      marginBottom: "0.75rem",
+                      paddingLeft: "0.5rem",
+                    })}
+                  >
+                    Asset Hub Tokens
+                  </h4>
+                  <div
+                    className={css({
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.75rem",
+                    })}
+                  >
+                    {filteredAssets
+                      .filter((asset) => asset.metadata.source !== "polkadot")
+                      .sort((a, b) =>
+                        a.metadata.symbol.localeCompare(b.metadata.symbol),
+                      )
+                      .map((asset) => {
+                        // Only check needsFeePayment for non-native tokens from Asset Hub
+                        const requiresFeePayment =
+                          asset.metadata.location &&
+                          !isNativeToken(asset.metadata.location) &&
+                          needsFeePayment(asset.id);
+
+                        return (
+                          <button
+                            key={`${asset.id}-${asset.metadata.source || "default"}`}
+                            onClick={() => setSelectedAsset(asset)}
+                            className={css({
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.5rem",
+                              padding: "0.75rem 1rem",
+                              backgroundColor:
+                                selectedAsset?.id === asset.id &&
+                                selectedAsset?.metadata.source !== "polkadot"
+                                  ? "primary"
+                                  : "surfaceContainerHigh",
+                              color:
+                                selectedAsset?.id === asset.id &&
+                                selectedAsset?.metadata.source !== "polkadot"
+                                  ? "onPrimary"
+                                  : "content",
+                              border: "none",
+                              borderRadius: "lg",
+                              cursor: "pointer",
+                              transition: "all 0.2s ease",
+                              "&:hover": {
+                                backgroundColor:
+                                  selectedAsset?.id === asset.id &&
+                                  selectedAsset?.metadata.source !== "polkadot"
+                                    ? "primary"
+                                    : "surfaceContainerHighest",
+                              },
+                            })}
+                          >
                             <div
                               className={css({
-                                fontSize: "0.75rem",
-                                color:
-                                  selectedAsset?.id === asset.id
-                                    ? "onPrimary"
-                                    : "warning",
-                                textAlign: "left",
                                 display: "flex",
+                                justifyContent: "space-between",
                                 alignItems: "center",
-                                gap: "0.25rem",
+                                width: "100%",
                               })}
                             >
-                              ⚠️ Requires at least 0.1 USDT/USDC for fees to
-                              bridge out
+                              <div
+                                className={css({
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.75rem",
+                                })}
+                              >
+                                <TokenIcon
+                                  symbol={asset.metadata.symbol}
+                                  size="md"
+                                />
+                                <span className={css({ fontWeight: "500" })}>
+                                  {asset.metadata.symbol}
+                                </span>
+                              </div>
+                              <span
+                                className={css({
+                                  fontSize: "0.875rem",
+                                  color:
+                                    selectedAsset?.id === asset.id &&
+                                    selectedAsset?.metadata.source !==
+                                      "polkadot"
+                                      ? "onPrimary"
+                                      : "content.muted",
+                                })}
+                              >
+                                From Asset Hub
+                              </span>
                             </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                            {requiresFeePayment && (
+                              <div
+                                className={css({
+                                  fontSize: "0.75rem",
+                                  color:
+                                    selectedAsset?.id === asset.id &&
+                                    selectedAsset?.metadata.source !==
+                                      "polkadot"
+                                      ? "onPrimary"
+                                      : "warning",
+                                  textAlign: "left",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                })}
+                              >
+                                ⚠️ Requires at least 0.1 USDT/USDC for fees to
+                                bridge out
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -861,108 +1263,76 @@ export function BridgeAssetsInDialog({
               })}
             >
               {selectedAsset && (
-                <>
-                  <TokenIcon symbol={selectedAsset.metadata.symbol} size="md" />
-                  <p>
-                    Enter the amount of {selectedAsset.metadata.symbol} to
-                    bridge to the DAO
-                  </p>
-                </>
+                <p>
+                  Enter the amount of {selectedAsset.metadata.symbol} to bridge
+                  to the DAO
+                </p>
               )}
             </div>
-
             <div
               className={css({
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem",
+                position: "relative",
+                width: "100%",
               })}
             >
               <TextInput
                 label={`Amount (${selectedAsset?.metadata.symbol})`}
                 value={amount}
-                onChangeValue={handleAmountChange}
+                onChangeValue={(value) => {
+                  // Allow decimal points and numbers
+                  const regex = new RegExp(
+                    `^\\d*\\.?\\d{0,${selectedAsset?.metadata.decimals || 0}}$`,
+                  );
+                  if (value === "" || regex.test(value)) {
+                    setAmount(value);
+                  }
+                }}
                 placeholder={`Enter amount in ${selectedAsset?.metadata.symbol}`}
                 className={css({ width: "100%" })}
               />
-
-              {/* Add ED warning */}
-              {isRemainderBelowED && (
-                <div
-                  className={css({
-                    backgroundColor: "warningContainer",
-                    color: "onWarningContainer",
-                    padding: "0.75rem 1rem",
-                    borderRadius: "md",
-                    fontSize: "0.875rem",
-                  })}
-                >
-                  <p>
-                    <strong>Warning:</strong> The amount you&apos;re trying to
-                    bridge is less than the existential deposit (
-                    {selectedAsset &&
-                      new DenominatedNumber(
-                        selectedAsset.metadata.existential_deposit,
-                        selectedAsset.metadata.decimals,
-                      ).toLocaleString()}
-                    &nbsp;{selectedAsset?.metadata.symbol}). The funds may be
-                    lost if you proceed.
-                  </p>
-                </div>
-              )}
-
-              <div
+              <button
+                type="button"
+                onClick={() => setAmount(maxAmountValue)}
                 className={css({
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.25rem",
+                  position: "absolute",
+                  right: "0.5rem",
+                  top: "2.5rem", // Adjusted to account for label
+                  background: "none",
+                  border: "none",
+                  color: "primary",
+                  cursor: "pointer",
+                  padding: "0.25rem 0.5rem",
+                  fontSize: "0.85rem",
+                  borderRadius: "md",
+                  "&:hover": {
+                    backgroundColor: "surfaceContainerHighest",
+                  },
                 })}
               >
-                <p
-                  className={css({
-                    color: "content.muted",
-                    fontSize: "0.875rem",
-                  })}
-                >
-                  Available balance:{" "}
-                  {selectedAsset ? getFormattedBalance() : "Select an asset"} on{" "}
-                  {selectedAsset?.isNativeVarch ? "InvArch" : "Asset Hub"}
+                Max
+              </button>
+            </div>
+
+            <div
+              className={css({
+                fontSize: "0.85rem",
+                color: "content.muted",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              })}
+            >
+              <p>Available balance: {getFormattedBalance()}</p>
+              {selectedAsset?.metadata.source === "polkadot" && (
+                <p className={css({ color: "content.muted" })}>
+                  Note: A minimum balance of{" "}
+                  {new DenominatedNumber(
+                    relayDotExistentialDeposit,
+                    selectedAsset.metadata.decimals,
+                  ).toLocaleString()}{" "}
+                  DOT will be kept in your account
                 </p>
-                {selectedAsset && (
-                  <>
-                    <p
-                      className={css({
-                        fontSize: "0.85rem",
-                        color: "content.muted",
-                      })}
-                    >
-                      {selectedAsset.isNativeVarch
-                        ? "Make sure you have enough funds in your account to cover the transaction fees."
-                        : "Make sure you have enough funds in your Asset Hub account to cover the transaction fees."}
-                    </p>
-                    {selectedAsset.metadata.location &&
-                      !isNativeToken(selectedAsset.metadata.location) &&
-                      needsFeePayment(selectedAsset.id) && (
-                        <div
-                          className={css({
-                            fontSize: "0.85rem",
-                            color: "warning",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.25rem",
-                            marginTop: "0.5rem",
-                            backgroundColor: "warningContainer",
-                            padding: "0.75rem",
-                            borderRadius: "md",
-                          })}
-                        >
-                          ⚠️ This asset will require 0.1 USDT/USDC for fees when
-                          bridging out later
-                        </div>
-                      )}
-                  </>
-                )}
-              </div>
+              )}
             </div>
           </div>
         );
@@ -1064,131 +1434,133 @@ export function BridgeAssetsInDialog({
       <div
         className={css({
           display: "flex",
-          justifyContent: "space-between",
+          flexDirection: "column",
+          gap: "1rem",
           marginTop: "1.5rem",
         })}
       >
-        {step !== "select-asset" ? (
-          <Button
-            onClick={handleBackStep}
+        {warningMessage && (
+          <div
             className={css({
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              width: "auto",
+              color: "error",
+              textAlign: "center",
+              padding: "0.5rem",
+              fontSize: "0.875rem",
+              fontWeight: "500",
             })}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "0.2rem",
-              }}
-            >
-              <ArrowLeftIcon size={16} />
-              <span>Back</span>
-            </div>
-          </Button>
-        ) : (
-          <div></div> // Empty div to maintain layout
+            {warningMessage}
+          </div>
         )}
-
-        {step !== "review" ? (
-          <Button
-            onClick={handleNextStep}
-            disabled={!canProceed()}
-            className={css({
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              width: "auto",
-            })}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "0.2rem",
-              }}
-            >
-              <span>Next</span>
-              <ArrowRightIcon size={16} />
-            </div>
-          </Button>
-        ) : (
-          <Button
-            onClick={handleBridgeIn}
-            pending={isProcessing || assetHubBridge.isProcessing}
-            className={css({
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              width: "auto",
-              "@media (max-width: 768px)": {
-                fontSize: "0.875rem",
-                padding: "0.5rem 0.75rem",
-              },
-            })}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <CheckCircleIcon size={16} />
-              <span>
-                {selectedAsset?.isNativeVarch ? (
-                  "Transfer VARCH"
-                ) : (
-                  <span
-                    className={css({
-                      "@media (max-width: 768px)": {
-                        display: "none",
-                      },
-                    })}
-                  >
-                    Show Bridge Instructions
-                  </span>
-                )}
-                {!selectedAsset?.isNativeVarch && (
-                  <span
-                    className={css({
-                      "@media (min-width: 769px)": {
-                        display: "none",
-                      },
-                    })}
-                  >
-                    Bridge
-                  </span>
-                )}
-              </span>
-            </div>
-          </Button>
-        )}
+        <div
+          className={css({
+            display: "flex",
+            justifyContent: "space-between",
+          })}
+        >
+          <div>
+            {step !== "select-asset" && (
+              <Button
+                onClick={handleBackStep}
+                className={css({
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.2rem",
+                  width: "auto",
+                })}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.2rem",
+                  }}
+                >
+                  <ArrowLeftIcon size={16} />
+                  <span>Back</span>
+                </div>
+              </Button>
+            )}
+          </div>
+          <div>
+            {step !== "review" ? (
+              <Button
+                onClick={handleNextStep}
+                disabled={!canProceed()}
+                className={css({
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.2rem",
+                  width: "auto",
+                })}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.2rem",
+                  }}
+                >
+                  <span>Next</span>
+                  <ArrowRightIcon size={16} />
+                </div>
+              </Button>
+            ) : (
+              <Button
+                onClick={handleBridgeIn}
+                pending={isProcessing}
+                className={css({
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  width: "auto",
+                  "@media (max-width: 768px)": {
+                    fontSize: "0.875rem",
+                    padding: "0.5rem 0.75rem",
+                  },
+                })}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <CheckCircleIcon size={16} />
+                  <span>Bridge In</span>
+                </div>
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     );
-  };
-
-  // Get dynamic dialog title based on asset and step
-  const getDialogTitle = () => {
-    if (!selectedAsset) return "Fund Your DAO";
-
-    if (selectedAsset.isNativeVarch) {
-      return "Transfer VARCH to DAO";
-    } else {
-      return "Bridge Assets Into DAO";
-    }
   };
 
   // Main component render
   return (
     <ModalDialog
-      title={getDialogTitle()}
+      title={
+        <div
+          className={css({
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+          })}
+        >
+          {selectedAsset && (
+            <>
+              <TokenIcon symbol={selectedAsset.metadata.symbol} size="md" />
+              <span>Bridge Your Assets Into DAO</span>
+            </>
+          )}
+          {!selectedAsset && <span>Bridge Your Assets Into DAO</span>}
+        </div>
+      }
       onClose={onClose}
       className={css({
         containerType: "inline-size",
@@ -1326,8 +1698,7 @@ export function BridgeAssetsInDialog({
                   lineHeight: "1.5",
                 })}
               >
-                You are about to bridge an amount below the existential deposit
-                (
+                You are about to leave a balance below the existential deposit (
                 {selectedAsset && (
                   <>
                     {new DenominatedNumber(
@@ -1340,8 +1711,8 @@ export function BridgeAssetsInDialog({
                 ).
                 <br />
                 <br />
-                This may result in the funds being unusable and effectively
-                lost.
+                This may result in the remaining funds being unusable and
+                effectively lost.
                 <br />
                 <br />
                 Are you sure you want to proceed?
@@ -1364,6 +1735,18 @@ export function BridgeAssetsInDialog({
                   })}
                 >
                   No, let me adjust
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowEDConfirmation(false);
+                    setAmount(maxAmountValue);
+                  }}
+                  className={css({
+                    backgroundColor: "primary",
+                    color: "onPrimary",
+                  })}
+                >
+                  Use max amount
                 </Button>
                 <Button
                   onClick={() => {
