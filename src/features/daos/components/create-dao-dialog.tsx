@@ -5,7 +5,13 @@ import { TextInput } from "../../../components/text-input";
 import { useNotification } from "../../../contexts/notification-context";
 import { selectedAccountAtom } from "../../../features/accounts/store";
 import { DepositDialog } from "../../../routes/daos/_layout/assets";
+import { AccountListItem } from "../../../widgets/account-list-item";
 import { useLazyLoadInvArchExistentialDeposit } from "../../assets/store";
+import {
+  calculateTotalTokens,
+  calculateVotingPowerPercentages,
+  distributeEqualVotingTokens,
+} from "../utils/voting-power";
 import { MutationError, pending } from "@reactive-dot/core";
 import {
   useLazyLoadQuery,
@@ -14,7 +20,12 @@ import {
   useTypedApi,
 } from "@reactive-dot/react";
 import { useAtomValue } from "jotai";
-import { ArrowRightIcon, CheckCircleIcon, PlusIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  CheckCircleIcon,
+  PlusCircleIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { Binary, Enum } from "polkadot-api";
 import { useState, useEffect, useRef } from "react";
 
@@ -67,16 +78,13 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
   const { showNotification } = useNotification();
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [newDaoId, setNewDaoId] = useState<string>("");
-  const [newMemberAddress, setNewMemberAddress] = useState("");
-  const [members, setMembers] = useState<string[]>([]);
-  const [amount, setAmount] = useState("");
-  const EXISTENTIAL_DEPOSIT = useLazyLoadInvArchExistentialDeposit();
-  const REQUIRED_BUFFER = EXISTENTIAL_DEPOSIT * 2n;
-
-  // Add state for storing DAO storage
   const [daoStorage, setDaoStorage] = useState<{
     account: string;
   } | null>(null);
+  const [members, setMembers] = useState<string[]>([]);
+  const [newMemberAddress, setNewMemberAddress] = useState("");
+  const EXISTENTIAL_DEPOSIT = useLazyLoadInvArchExistentialDeposit();
+  const REQUIRED_BUFFER = EXISTENTIAL_DEPOSIT * 2n;
 
   // Query DAO storage when ID changes
   const daoStorageQuery = useLazyLoadQuery((builder) =>
@@ -91,6 +99,47 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
       setDaoStorage(daoStorageQuery);
     }
   }, [daoStorageQuery]);
+
+  const [memberTokens, setMemberTokens] = useState<{ [key: string]: string }>(
+    {},
+  );
+
+  // Update memberTokens when a new member is added
+  useEffect(() => {
+    const newTokens = { ...memberTokens };
+    members.forEach((member) => {
+      if (!(member in newTokens)) {
+        newTokens[member] = "1000000"; // Set default tokens to 1M for new members
+      }
+    });
+    // Remove tokens for removed members
+    Object.keys(newTokens).forEach((member) => {
+      if (!members.includes(member) && member !== selectedAccount?.address) {
+        delete newTokens[member];
+      }
+    });
+    setMemberTokens(newTokens);
+  }, [members, selectedAccount?.address]);
+
+  // Initialize creator's tokens
+  useEffect(() => {
+    if (
+      selectedAccount?.address &&
+      !(selectedAccount.address in memberTokens)
+    ) {
+      setMemberTokens((prev) => ({
+        ...prev,
+        [selectedAccount.address]: "1000000", // Initial creator tokens
+      }));
+    }
+  }, [selectedAccount?.address]);
+
+  const calculateEqualTokens = () => {
+    if (!members.length || !selectedAccount) return;
+    setMemberTokens(
+      distributeEqualVotingTokens(members, selectedAccount.address),
+    );
+  };
 
   // Validation function
   const isFormValid = () => {
@@ -135,13 +184,18 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
     }),
   );
 
-  // Add member mutation
-  const [_, addMember] = useMutation((builder) =>
+  // Add members mutation
+  const [_addMembersState, addMembers] = useMutation((builder) =>
     builder.INV4.operate_multisig({
       dao_id: Number(newDaoId),
-      call: builder.INV4.token_mint({
-        target: newMemberAddress,
-        amount: BigInt(amount) || 1n,
+      call: builder.Utility.batch_all({
+        calls: members.map(
+          (member) =>
+            builder.INV4.token_mint({
+              target: member,
+              amount: BigInt(memberTokens[member] || "0"),
+            }).decodedCall,
+        ),
       }).decodedCall,
       fee_asset: { type: "Native", value: undefined },
       metadata: undefined,
@@ -163,7 +217,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
       setIsProcessing(false);
       showNotification({
         variant: "error",
-        message: "Failed to submit transaction",
+        message: "Failed to submit transaction: " + event.value.message,
       });
       return;
     }
@@ -190,17 +244,18 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
           } else if (step === "add-members") {
             showNotification({
               variant: "success",
-              message: "Member added successfully!",
+              message: "Members added successfully!",
             });
-            // Clear the input field after successful addition
+            setMembers([]);
             setNewMemberAddress("");
-            // Add the member to the list
-            setMembers([...members, newMemberAddress]);
+            // Move to complete step after successfully adding members
+            setStep("complete");
           }
         } else {
           showNotification({
             variant: "error",
-            message: "Transaction failed",
+            message:
+              "Transaction failed: " + event.value.dispatchError.toString(),
           });
         }
         break;
@@ -226,23 +281,6 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
         variant: "error",
         message:
           "Failed to create DAO: " +
-          (error instanceof Error ? error.message : "Unknown error"),
-      });
-    }
-  };
-
-  const handleAddMember = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!newMemberAddress || !newDaoId) return;
-
-    try {
-      await addMember();
-    } catch (error) {
-      console.error("Failed to add member:", error);
-      showNotification({
-        variant: "error",
-        message:
-          "Failed to add member: " +
           (error instanceof Error ? error.message : "Unknown error"),
       });
     }
@@ -907,6 +945,25 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
     );
   };
 
+  const handleAddMember = () => {
+    if (!newMemberAddress || !selectedAccount) return;
+
+    // Don't add if it's the creator's address
+    if (newMemberAddress === selectedAccount.address) return;
+
+    // Don't add if the address is already in the list
+    if (members.includes(newMemberAddress)) {
+      showNotification({
+        variant: "error",
+        message: "This address is already in the list",
+      });
+      return;
+    }
+
+    setMembers((prev) => [...prev, newMemberAddress]);
+    setNewMemberAddress(""); // Clear the input after adding
+  };
+
   const renderAddMembersStep = () => (
     <div
       className={css({
@@ -925,123 +982,308 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
           Add Members (Optional)
         </h3>
         <p className={css({ color: "content.muted", marginTop: "0.5rem" })}>
-          You can add members now or skip this step and add them later
+          First add member addresses, then configure their voting power
         </p>
       </div>
 
-      <form
-        onSubmit={handleAddMember}
+      {/* Display current total tokens */}
+      <div
         className={css({
+          backgroundColor: "surfaceContainer",
+          padding: "1rem",
+          borderRadius: "0.5rem",
           display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-          marginBottom: "1rem",
+          justifyContent: "space-between",
+          alignItems: "center",
+          height: "auto",
         })}
       >
-        <TextInput
-          label="Member Address"
-          value={newMemberAddress}
-          onChangeValue={setNewMemberAddress}
-          placeholder="Enter member's address"
-        />
-        <div
-          className={css({
-            display: "flex",
-            gap: "1rem",
-          })}
-        >
-          <TextInput
-            label="Voting Tokens"
-            value={amount}
-            onChangeValue={(value) => {
-              // Allow only positive integers
-              if (value === "" || /^\d+$/.test(value)) {
-                setAmount(value);
-              }
-            }}
-            placeholder="Enter number of tokens (default: 1)"
-            className={css({ flex: 1 })}
-          />
-          <Button
-            type="submit"
-            disabled={!newMemberAddress || isProcessing}
-            className={css({
-              marginTop: "auto",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            })}
-          >
-            <PlusIcon size={16} />
-            Add
-          </Button>
-        </div>
-      </form>
+        <span className={css({ color: "content.muted" })}>
+          Total Voting Tokens:
+        </span>
+        <span>{calculateTotalTokens(memberTokens).toString()}</span>
+      </div>
 
-      {members.length > 0 && (
-        <div
-          className={css({
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.5rem",
-          })}
-        >
-          <h4 className={css({ fontSize: "0.9rem", color: "content.muted" })}>
-            Added Members:
-          </h4>
-          <ul
-            className={css({
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            })}
-          >
-            {members.map((member, index) => (
-              <li
-                key={index}
-                className={css({
-                  padding: "0.5rem",
-                  backgroundColor: "surfaceContainer",
-                  borderRadius: "0.5rem",
-                  fontSize: "0.9rem",
-                })}
-              >
-                {member}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
+      {/* Add member form */}
       <div
         className={css({
           display: "flex",
-          justifyContent: "space-between",
-          marginTop: "1rem",
+          gap: "1rem",
+          alignItems: "center",
         })}
       >
-        <Button
-          onClick={() => setStep("complete")}
+        <TextInput
+          label="Add Members"
+          value={newMemberAddress}
+          onChangeValue={setNewMemberAddress}
+          placeholder="Enter member's address"
+          className={css({ flex: 1 })}
+        />
+        <button
+          onClick={handleAddMember}
+          disabled={
+            !newMemberAddress || newMemberAddress === selectedAccount?.address
+          }
           className={css({
-            backgroundColor: "surface",
-            color: "onSurface",
+            color: "primary",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            padding: "0.5rem",
+            marginTop: "1.5rem",
+            "&:disabled": {
+              color: "content.muted",
+              cursor: "not-allowed",
+            },
+            "&:not(:disabled):hover": {
+              color: "primaryHover",
+            },
           })}
         >
-          Skip
-        </Button>
-        <Button onClick={() => setStep("complete")}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
-          >
-            <span>Continue</span>
-            <ArrowRightIcon size={16} />
-          </div>
-        </Button>
+          <PlusCircleIcon size={20} />
+        </button>
       </div>
+
+      {/* Equal voting power distribution button */}
+      {(members.length > 0 || selectedAccount) && (
+        <button
+          onClick={calculateEqualTokens}
+          className={css({
+            color: "primary",
+            fontSize: "0.875rem",
+            padding: "0.5rem",
+            width: "fit-content",
+            marginLeft: "auto",
+            marginRight: "auto",
+            cursor: "pointer",
+            "&:hover": {
+              textDecoration: "underline",
+            },
+          })}
+        >
+          Distribute equal voting power to all members
+        </button>
+      )}
+
+      {/* Member list with token configuration */}
+      <div
+        className={css({
+          backgroundColor: "surfaceContainer",
+          borderRadius: "0.5rem",
+          overflow: "hidden",
+        })}
+      >
+        <table
+          className={css({
+            width: "100%",
+            borderCollapse: "collapse",
+          })}
+        >
+          <thead>
+            <tr
+              className={css({
+                color: "content.muted",
+                fontSize: "0.875rem",
+              })}
+            >
+              <th
+                className={css({
+                  padding: "0.75rem",
+                  textAlign: "left",
+                })}
+              >
+                Address
+              </th>
+              <th
+                className={css({
+                  padding: "0.75rem",
+                  textAlign: "right",
+                })}
+              >
+                Voting Tokens
+              </th>
+              <th
+                className={css({
+                  padding: "0.75rem",
+                  textAlign: "right",
+                })}
+              >
+                Voting Power
+              </th>
+              <th className={css({ width: "48px" })}></th>
+            </tr>
+          </thead>
+        </table>
+
+        <div
+          className={css({
+            maxHeight: "20vh",
+            overflowY: "auto",
+            "&::-webkit-scrollbar": {
+              width: "6px",
+            },
+            "&::-webkit-scrollbar-track": {
+              background: "surface",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              background: "surfaceContainer",
+              borderRadius: "3px",
+            },
+          })}
+        >
+          <table
+            className={css({
+              width: "100%",
+              borderCollapse: "collapse",
+            })}
+          >
+            <tbody>
+              {/* Creator's row (non-removable) */}
+              {selectedAccount && (
+                <tr>
+                  <td className={css({ padding: "0.75rem" })}>
+                    <div
+                      className={css({
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      })}
+                    >
+                      <AccountListItem address={selectedAccount.address} />
+                      <span
+                        className={css({
+                          color: "content.muted",
+                          fontSize: "0.875rem",
+                        })}
+                      >
+                        (Creator)
+                      </span>
+                    </div>
+                  </td>
+                  <td className={css({ padding: "0.75rem" })}>
+                    <div
+                      className={css({
+                        // width: "100%",
+                        alignItems: "center",
+                        padding: "0.5rem",
+                        backgroundColor: "surface",
+                        borderRadius: "0.375rem",
+                        color: "content.muted",
+                        textAlign: "left",
+                      })}
+                    >
+                      {memberTokens[selectedAccount.address] || "1000000"}
+                    </div>
+                  </td>
+                  <td
+                    className={css({
+                      padding: "0.75rem",
+                      textAlign: "right",
+                    })}
+                  >
+                    {calculateVotingPowerPercentages(memberTokens)[
+                      selectedAccount.address
+                    ]?.toFixed(2)}
+                    %
+                  </td>
+                  <td></td>
+                </tr>
+              )}
+
+              {/* Member rows */}
+              {members.map((member) => (
+                <tr
+                  key={member}
+                  className={css({
+                    "&:hover": { backgroundColor: "surfaceHover" },
+                  })}
+                >
+                  <td className={css({ padding: "0.75rem" })}>
+                    <AccountListItem address={member} />
+                  </td>
+                  <td className={css({ padding: "0.75rem" })}>
+                    <TextInput
+                      value={memberTokens[member] || "0"}
+                      onChangeValue={(value) => {
+                        if (value === "" || /^\d+$/.test(value)) {
+                          setMemberTokens((prev) => ({
+                            ...prev,
+                            [member]: value,
+                          }));
+                        }
+                      }}
+                      className={css({
+                        width: "100%",
+                      })}
+                    />
+                  </td>
+                  <td
+                    className={css({
+                      padding: "0.75rem",
+                      textAlign: "right",
+                    })}
+                  >
+                    {calculateVotingPowerPercentages(memberTokens)[
+                      member
+                    ]?.toFixed(2)}
+                    %
+                  </td>
+                  <td
+                    className={css({
+                      padding: "0.75rem",
+                      textAlign: "center",
+                    })}
+                  >
+                    <button
+                      onClick={() =>
+                        setMembers(members.filter((m) => m !== member))
+                      }
+                      className={css({
+                        color: "error",
+                        padding: "0.5rem",
+                        borderRadius: "0.25rem",
+                        "&:hover": {
+                          opacity: 0.8,
+                          backgroundColor: "surfaceHover",
+                        },
+                      })}
+                    >
+                      <Trash2Icon size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {(members.length > 0 || selectedAccount) && (
+        <div
+          className={css({
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: "1rem",
+            gap: "1rem",
+          })}
+        >
+          <Button
+            onClick={() => setStep("complete")}
+            className={css({
+              backgroundColor: "surface",
+              color: "onSurface",
+            })}
+          >
+            Skip
+          </Button>
+          <Button
+            onClick={() => addMembers()}
+            disabled={isProcessing || members.length === 0}
+          >
+            Add Members
+          </Button>
+        </div>
+      )}
     </div>
   );
 
@@ -1070,14 +1312,21 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
         <CheckCircleIcon size={32} color="white" />
       </div>
       <h3 className={css({ fontSize: "1.25rem", fontWeight: "bold" })}>
-        DAO Created Successfully!
+        DAO Setup Complete!
       </h3>
-      <p className={css({ color: "content.muted" })}>
-        Your DAO has been created
-        {members.length > 0 ? " and members have been added" : ""}. You can now
-        start managing your DAO.
+      <p className={css({ color: "content.muted", lineHeight: "1.5" })}>
+        Congratulations! Your DAO has been created and configured successfully.
+        You can now start managing your DAO, create proposals, and collaborate
+        with your members.
+        <br />
+        <br />
+        The DAO is now ready for:
+        <br />• Creating and voting on proposals
+        <br />• Managing assets and treasury
+        <br />• Adding more members
+        <br />• Configuring additional settings
       </p>
-      <Button onClick={onClose}>Close</Button>
+      <Button onClick={onClose}>Start Using Your DAO</Button>
     </div>
   );
 
@@ -1089,6 +1338,8 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
         className={css({
           containerType: "inline-size",
           width: `min(34rem, 100dvw)`,
+          maxHeight: "100%",
+          overflow: "auto",
         })}
       >
         {renderStepIndicator()}
