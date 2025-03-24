@@ -119,7 +119,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
       }
     });
     setMemberTokens(newTokens);
-  }, [members, selectedAccount?.address]);
+  }, [memberTokens, members, selectedAccount?.address]);
 
   // Initialize creator's tokens
   useEffect(() => {
@@ -132,7 +132,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
         [selectedAccount.address]: "1000000", // Initial creator tokens
       }));
     }
-  }, [selectedAccount?.address]);
+  }, [memberTokens, selectedAccount?.address]);
 
   const calculateEqualTokens = () => {
     if (!members.length || !selectedAccount) return;
@@ -1088,7 +1088,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
             >
               <th
                 className={css({
-                  padding: "0.75rem",
+                  padding: ".75rem",
                   textAlign: "left",
                 })}
               >
@@ -1098,6 +1098,8 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                 className={css({
                   padding: "0.75rem",
                   textAlign: "right",
+                  paddingLeft: "7rem",
+                  // paddingRight: "0rem",
                 })}
               >
                 Voting Tokens
@@ -1117,7 +1119,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
 
         <div
           className={css({
-            maxHeight: "20vh",
+            maxHeight: "30vh",
             overflowY: "auto",
             "&::-webkit-scrollbar": {
               width: "6px",
@@ -1141,19 +1143,23 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
               {/* Creator's row (non-removable) */}
               {selectedAccount && (
                 <tr>
-                  <td className={css({ padding: "0.75rem" })}>
+                  <td
+                    className={css({
+                      padding: "0.75rem",
+                      paddingRight: "0rem",
+                    })}
+                  >
                     <div
                       className={css({
                         display: "flex",
                         alignItems: "center",
-                        gap: "0.5rem",
                       })}
                     >
                       <AccountListItem address={selectedAccount.address} />
                       <span
                         className={css({
                           color: "content.muted",
-                          fontSize: "0.875rem",
+                          fontSize: "0.75rem",
                         })}
                       >
                         (Creator)
@@ -1169,7 +1175,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                         backgroundColor: "surface",
                         borderRadius: "0.375rem",
                         color: "content.muted",
-                        textAlign: "left",
+                        textAlign: "right",
                       })}
                     >
                       {memberTokens[selectedAccount.address] || "1000000"}
@@ -1198,29 +1204,47 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                     "&:hover": { backgroundColor: "surfaceHover" },
                   })}
                 >
-                  <td className={css({ padding: "0.75rem" })}>
+                  <td className={css({ padding: "0.75rem", width: "50%" })}>
                     <AccountListItem address={member} />
                   </td>
-                  <td className={css({ padding: "0.75rem" })}>
-                    <TextInput
-                      value={memberTokens[member] || "0"}
-                      onChangeValue={(value) => {
-                        if (value === "" || /^\d+$/.test(value)) {
-                          setMemberTokens((prev) => ({
-                            ...prev,
-                            [member]: value,
-                          }));
-                        }
-                      }}
+                  <td
+                    className={css({
+                      padding: "0.75rem",
+                      width: "25%",
+                      minWidth: "120px",
+                    })}
+                  >
+                    <div
                       className={css({
-                        width: "100%",
+                        display: "flex",
+                        justifyContent: "flex-end",
                       })}
-                    />
+                    >
+                      <TextInput
+                        value={memberTokens[member] || "0"}
+                        onChangeValue={(value) => {
+                          if (value === "" || /^\d+$/.test(value)) {
+                            setMemberTokens((prev) => ({
+                              ...prev,
+                              [member]: value,
+                            }));
+                          }
+                        }}
+                        className={css({
+                          width: "120px",
+                          "& input": {
+                            textAlign: "right",
+                          },
+                        })}
+                      />
+                    </div>
                   </td>
                   <td
                     className={css({
                       padding: "0.75rem",
                       textAlign: "right",
+                      width: "15%",
+                      whiteSpace: "nowrap",
                     })}
                   >
                     {calculateVotingPowerPercentages(memberTokens)[
@@ -1232,6 +1256,7 @@ export function CreateDaoDialog({ onClose }: CreateDaoDialogProps) {
                     className={css({
                       padding: "0.75rem",
                       textAlign: "center",
+                      width: "10%",
                     })}
                   >
                     <button
