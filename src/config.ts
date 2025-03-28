@@ -14,7 +14,7 @@ export const config = defineConfig({
     invarch: {
       descriptor: invarch,
       provider: withPolkadotSdkCompat(
-        getWsProvider("wss://invarch-rpc.dwellir.com"),
+        getWsProvider("wss://invarch.ibp.network"),
         // getWsProvider("ws://localhost:8000"),
       ),
     },
